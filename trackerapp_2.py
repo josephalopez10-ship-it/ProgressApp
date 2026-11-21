@@ -157,7 +157,7 @@ def remove_door():
                 continue  # Continue the while loop to allow removing more doors or quitting.
             
         print(f"\n{remove_door_name} is not in the list. Please try again.\n")
-
+# Function to edit a doors attributes.
 def edit_door():
 
     while True:
@@ -165,9 +165,10 @@ def edit_door():
 
         if door_to_edit == "Q":
             return
-        
+        # create variable to track whethe or not the userinput is in the list
         found_door = None
-
+    
+        # check to see if user input is in the current list of doors
         for door in door_list:
             if door[1] == door_to_edit:
                 found_door = door
@@ -177,6 +178,7 @@ def edit_door():
             print(f"Not in list please try again")
             continue
 
+        #print all information for the chosen door so the user cna see it before editing
         print(f"You chose to edit: {door_to_edit}")
         print(f"Name:         {found_door[1]}")
         print(f"Status:       {found_door[2]}")
@@ -201,7 +203,10 @@ def edit_door():
             "R": (7, "restraint", "Restraint"),
         }
 
-        if choice not in options_to_edit:
+        if choice == "Q":
+            continue
+        
+        elif choice not in options_to_edit:
             print(f"Invalid option try again. OPTIONS ARE CASE-SENSIITVE.")
             continue
 
