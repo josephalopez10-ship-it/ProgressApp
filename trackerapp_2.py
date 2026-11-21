@@ -16,32 +16,34 @@ door_list = []
 
 # The Door class represents a single door with its associated attributes: name, status, location, and restraint. It provides methods to convert the object to and from a single line of text for storage in a file.
 class Door:
-    def __init__(self, name, status, location, restraint):
+    def __init__(self, name, door_status, card_reader, door_contact, lock, rex, restraint):
         # These attributes store the four pieces of information associated with a door.
         self.name = name
-        self.status = status
-        self.location = location
+        self.status = door_status
+        self.card_reader = card_reader
+        self.door_contact = door_contact
+        self.lock = lock
+        self.rex = rex
         self.restraint = restraint
 
     # Convert this Door object into one comma-separated line for storage in the text file.
     # The spaces after commas match the format expected by from_single_line().
     def to_single_line(self):
-        return f"{self.name}, {self.status}, {self.location}, {self.restraint}"
+        return f"{self.name}, {self.status}, {self.card_reader}, {self.door_contact}, {self.lock}, {self.rex}, {self.restraint}"
 
     # Fill this Door object using a comma-separated line read from the text file.
     # strip() removes the newline and surrounding whitespace, while split() separates
-    # the four saved values. A line is only valid if it contains exactly four parts.
+    # the seven saved values. A line is only valid if it contains exactly seven parts.
     def from_single_line(self, line):
         parts = line.strip().split(", ")
-        if len(parts) == 4:
-            self.name, self.status, self.location, self.restraint = parts
+        if len(parts) == 7:
+            self.name, self.status, self.card_reader, self.door_contact, self.lock, self.rex, self.restraint = parts
         else:
             raise ValueError("Invalid line format for Door object.")
         
     # The __repr__ method provides a string representation of the Door object, useful for debugging and logging.
     def __repr__(self):
-        return f"Door(name={self.name}, status={self.status}, location={self.location}, restraint={self.restraint})"
-    
+        return f"Door(name={self.name}, status={self.status}, card_reader={self.card_reader}, door_contact={self.door_contact}, lock={self.lock}, rex={self.rex}, restraint={self.restraint})"
 
 # Read door_list.txt and rebuild the in-memory door_list at startup.
 def load_doors():
@@ -54,7 +56,7 @@ def load_doors():
                     continue
 
                 # Start with a temporary empty Door, then populate it from the line.
-                door = Door("", "", "", "")
+                door = Door("", "", "", "", "", "", "")
                 try:
                     door.from_single_line(line)
                 except ValueError as error:
@@ -68,7 +70,10 @@ def load_doors():
                     door,
                     door.name,
                     door.status,
-                    door.location,
+                    door.card_reader,
+                    door.door_contact,
+                    door.lock,
+                    door.rex,
                     door.restraint,
                 ])
     except FileNotFoundError:
@@ -129,8 +134,20 @@ def add_door():
         if new_door_status == "Q":
             return
         
-        new_door_location = input("Door Location: ")
-        if new_door_location == "Q":
+        new_card_reader = input("Card Reader: ")
+        if new_card_reader == "Q":
+            return
+        
+        new_door_contact = input("Door Contact: ")
+        if new_door_contact == "Q":
+            return
+        
+        new_lock = input("Lock: ")
+        if new_lock == "Q":
+            return
+        
+        new_rex = input("REX: ")
+        if new_rex == "Q":
             return
         
         new_door_restraint = input("Door Restraint: ")
@@ -138,8 +155,8 @@ def add_door():
             return
         
         else:
-            new_door = Door(new_door_name, new_door_status, new_door_location, new_door_restraint)
-            door_list.append([new_door, new_door_name,new_door_status, new_door_location, new_door_restraint])
+            new_door = Door(new_door_name, new_door_status, new_card_reader, new_door_contact, new_lock, new_rex, new_door_restraint)
+            door_list.append([new_door, new_door_name,new_door_status, new_card_reader, new_door_contact, new_lock, new_rex, new_door_restraint])
 
             # Immediately rewrite door_list.txt so the newly added door survives a restart.
             save_doors()
@@ -177,10 +194,13 @@ def list_doors():
     print("List of all doors:")
     for door in door_list:
         print(f"--------------------------------------------------------------------------------------------------------------------------------------------")  # Print the door name, status, location, and restraint
-        print(f"Door:      {door[1]}")  # Print the door name
-        print(f"Status:    {door[2]}")  # Print the door status
-        print(f"Location:  {door[3]}")  # Print the door location
-        print(f"Restraint: {door[4]}")  # Print the door restraint
+        print(f"Door:         {door[1]}")  # Print the door name
+        print(f"Status:       {door[2]}")  # Print the door status
+        print(f"Card Reader:  {door[3]}")  # Print the door card reader
+        print(f"Door Contact: {door[4]}")  # Print the door contact
+        print(f"Lock:         {door[5]}")  # Print the door lock
+        print(f"REX:          {door[6]}")  # Print the door REX
+        print(f"Restraint:    {door[7]}")  # Print the door restraint
         print(f"--------------------------------------------------------------------------------------------------------------------------------------------\n")  # Print a separator line
 
 # This block only runs when trackerapp_2.py is executed directly. It will not run
