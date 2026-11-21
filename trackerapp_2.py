@@ -177,9 +177,20 @@ def edit_door():
             print(f"Not in list please try again")
             continue
 
+        print(f"You chose to edit: {door_to_edit}")
+        print(f"Name:         {found_door[1]}")
+        print(f"Status:       {found_door[2]}")
+        print(f"Card Reader:  {found_door[3]}")
+        print(f"Door Contact: {found_door[4]}")
+        print(f"Lock:         {found_door[5]}")
+        print(f"REX:          {found_door[6]}")
+        print(f"Restraint:    {found_door[7]}")
+
+        print("####################################################")
         print(f"N - Door name, S - Status, C - Card Reader")
         print(f"D - Door Contact, L - Lock, E - REX, R - Restraint")
-        choice = input(f"What would you like to edit?")
+        print("####################################################\n")
+        choice = input(f"What would you like to edit?\n")
         options_to_edit = {
             "N": (1, "name", "Door name"),
             "S": (2, "status", "Status"),
@@ -200,7 +211,7 @@ def edit_door():
         found_door[index] = new_label
         setattr(found_door[0], attribute, new_label)
         save_doors()
-        print(f"{door_to_edit} has been updated.")
+        print(f"Data has been updated.")
         
 
 # Function to list all doors in the list. It prints each door name on a new line.
