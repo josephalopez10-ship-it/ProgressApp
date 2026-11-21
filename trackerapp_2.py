@@ -211,8 +211,8 @@ def edit_door():
             continue
 
         index, attribute, label = options_to_edit[choice]
-        print(f"Editing door: {door_to_edit}, {choice}:")
-        new_label = input(f"Enter updated information.")
+        print(f"Editing door: {found_door[1]}, {label}:")
+        new_label = input(f"Enter updated information.\n")
 
         found_door[index] = new_label
         setattr(found_door[0], attribute, new_label)
