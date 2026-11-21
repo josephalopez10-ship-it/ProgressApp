@@ -1,6 +1,6 @@
 # Path provides a safe, platform-independent way to work with file and folder names.
 from pathlib import Path
-#hello test
+
 # __file__ is the location of this Python script. resolve() converts it to an absolute
 # path, and with_name() replaces the script's filename with door_list.txt. This means
 # the app looks for the file next to trackerapp_2.py regardless of the current folder
