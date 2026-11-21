@@ -183,3 +183,4 @@ if __name__ == "__main__":
     # Repeatedly show the menu until menu() changes quit to False.
     while quit:
         menu()
+        print_
