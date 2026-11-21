@@ -65,7 +65,7 @@ def menu():
     print("********Welcome to the Door Tracker App!********")
     print("************************************************")
     print()
-    print(" A - Add a door/doors, R - Remove a door/doors, L - List all doors, Q - Quit")
+    print(" A - Add a door/doors, R - Remove a door/doors, E - Edit a door, L - List all doors, Q - Quit")
     choice = input()
     # the users choice is not CASE-SENSITIVE in the menu, but it is CASE-SENSITIVE in the add_door() and remove_door() functions.
     if choice == "A" or choice == "a":
@@ -74,6 +74,8 @@ def menu():
         remove_door()
     elif choice == "L" or choice == "l":
         list_doors()
+    elif choice == "E" or choice == "e":
+        edit_door()
     elif choice == "Q" or choice == "q":
         print("Thank you for using Tracker.")
         global quit
@@ -156,7 +158,51 @@ def remove_door():
             
         print(f"\n{remove_door_name} is not in the list. Please try again.\n")
 
+def edit_door():
+
+    while True:
+        door_to_edit = input(f"Enter the name of the door to edit:\n")
+
+        if door_to_edit == "Q":
+            return
         
+        found_door = None
+
+        for door in door_list:
+            if door[1] == door_to_edit:
+                found_door = door
+                break
+
+        if found_door is None:
+            print(f"Not in list please try again")
+            continue
+
+        print(f"N - Door name, S - Status, C - Card Reader")
+        print(f"D - Door Contact, L - Lock, E - REX, R - Restraint")
+        choice = input(f"What would you like to edit?")
+        options_to_edit = {
+            "N": (1, "name", "Door name"),
+            "S": (2, "status", "Status"),
+            "C": (3, "card_reader", "Card Reader"),
+            "D": (4, "door_contact", "Door Contact"),
+            "L": (5, "lock", "Lock"),
+            "E": (6, "rex", "REX"),
+            "R": (7, "restraint", "Restraint"),
+        }
+
+        if choice not in options_to_edit:
+            print(f"Invalid option try again. OPTIONS ARE CASE-SENSIITVE.")
+            continue
+
+        index, attribute, label = options_to_edit[choice]
+        new_label = input(f"Enter updated information.")
+
+        found_door[index] = new_label
+        setattr(found_door[0], attribute, new_label)
+        save_doors()
+        print(f"{door_to_edit} has been updated.")
+        
+
 # Function to list all doors in the list. It prints each door name on a new line.
 def list_doors():
     print("\nList of all doors:\n")
