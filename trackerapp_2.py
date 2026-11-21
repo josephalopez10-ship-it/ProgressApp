@@ -188,11 +188,14 @@ def edit_door():
         print(f"REX:          {found_door[6]}")
         print(f"Restraint:    {found_door[7]}")
 
+        # small menu of options to edit
         print("####################################################")
         print(f"N - Door name, S - Status, C - Card Reader")
         print(f"D - Door Contact, L - Lock, E - REX, R - Restraint")
         print("####################################################\n")
         choice = input(f"What would you like to edit?\n")
+
+        #tupel of options to choose from
         options_to_edit = {
             "N": (1, "name", "Door name"),
             "S": (2, "status", "Status"),
@@ -209,15 +212,19 @@ def edit_door():
         elif choice not in options_to_edit:
             print(f"Invalid option try again. OPTIONS ARE CASE-SENSIITVE.")
             continue
-
+    
+        # print the door and antribute of the door that is being edited
         index, attribute, label = options_to_edit[choice]
         print(f"Editing door: {found_door[1]}, {label}:")
         new_label = input(f"Enter updated information.\n")
 
+        if new_label == "Q":
+            continue
+
         found_door[index] = new_label
         setattr(found_door[0], attribute, new_label)
         save_doors()
-        print(f"Data has been updated.")
+        print(f"Data has been updated.\n")
         
 
 # Function to list all doors in the list. It prints each door name on a new line.
