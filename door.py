@@ -4,7 +4,7 @@ class Door:
         # These attributes store the four pieces of information associated with a door.
         self.name = name
         self.status = door_status
-        self.card_reader = card_reader
+        self.card_reader = CardReader(card_reader)  # Create a CardReader object for the card reader status
         self.door_contact = door_contact
         self.lock = lock
         self.rex = rex
@@ -28,3 +28,11 @@ class Door:
     # The __repr__ method provides a string representation of the Door object, useful for debugging and logging.
     def __repr__(self):
         return f"Door(name={self.name}, status={self.status}, card_reader={self.card_reader}, door_contact={self.door_contact}, lock={self.lock}, rex={self.rex}, restraint={self.restraint})"
+
+
+class CardReader:
+    def __init__(self, status):
+        self.status = status
+
+    def print_reader_status(self):
+        print(f"Card Reader: {self.status}")
