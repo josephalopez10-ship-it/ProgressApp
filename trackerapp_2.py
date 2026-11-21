@@ -152,7 +152,7 @@ def remove_door():
                 # Save after removal so door_list.txt no longer contains the deleted door.
                 save_doors()
                 print(f"\n{remove_door_name} has been removed from the list.\n")
-                return
+                continue  # Continue the while loop to allow removing more doors or quitting.
             
         print(f"\n{remove_door_name} is not in the list. Please try again.\n")
 
