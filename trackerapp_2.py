@@ -159,7 +159,7 @@ def remove_door():
         
 # Function to list all doors in the list. It prints each door name on a new line.
 def list_doors():
-    print("List of all doors:")
+    print("\nList of all doors:\n")
     for door in door_list:
         print(f"--------------------------------------------------------------------------------------------------------------------------------------------")  # Print the door name, status, location, and restraint
         print(f"Door:         {door[1]}")  # Print the door name
