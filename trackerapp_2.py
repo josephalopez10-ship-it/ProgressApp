@@ -1,3 +1,5 @@
+#ADD DEVICES TO DOORS
+
 # Path provides a safe, platform-independent way to work with file and folder names.
 from pathlib import Path
 
