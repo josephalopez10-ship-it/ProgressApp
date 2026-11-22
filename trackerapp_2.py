@@ -141,41 +141,46 @@ def add_door():
 def remove_door():
     while True:
         print("Please enter the name of the door you would like to remove. L - view door list, Q - quit. CHOICES ARE CASE-SENSITIVE.")
-        
+        print()
         remove_door_name = input("Door Name: ")
         print()
-        if remove_door_name == "Q":
-            return
-        
-        # Entering uppercase L displays the current list without ending or restarting
-        # the remove workflow; continue then prompts for another door name.
-        if remove_door_name == "L":
-            list_doors()
-            continue
 
-        print(Fore.RED+f"Are you sure you want to DELETE: "+f"{remove_door_name} [Y/N]")
-        choice = input()
-        if choice == "Y":
-            for door in door_list:
-                if door[1] == remove_door_name:
-                    door_list.remove(door)
-
-                    # Save after removal so door_list.txt no longer contains the deleted door.
-                    save_doors()
-                    print(Fore.RED+f"\n{remove_door_name} has been DELETED from the list.\n")
-                    print()
-                    continue  # Continue the while loop to allow removing more doors or quitting.
-                else:
-                    print(f"{remove_door_name} is not in the door list.")
+        for door in door_list:
+            if remove_door_name != door[1] and remove_door_name.upper() != "Q" and remove_door_name.upper() != "L":
+                print(f"{remove_door_name} is not in the door list.")
+                print()
+                continue
+            elif remove_door_name == "Q" and remove_door_name != door[1]:
+                return
+            elif remove_door_name == "L" and remove_door_name != door[1]:
+                        list_doors()
+                        continue
+       
+            # Entering uppercase L displays the current list without ending or restarting
+            # the remove workflow; continue then prompts for another door name.
+            else:
+                print(Fore.RED+f"Are you sure you want to DELETE: "+f"{remove_door_name} [Y/N]")
+                choice = input().upper()
+                if choice == "Y":
+                    for door in door_list:
+                        if door[1] == remove_door_name:
+                            door_list.remove(door)
+                            # Save after removal so door_list.txt no longer contains the deleted door.
+                            save_doors()
+                            print(Fore.RED+f"\n{remove_door_name} has been DELETED from the list.\n")
+                            print()
+                            continue  # Continue the while loop to allow removing more doors or quitting.
+                        else:
+                            print(f"{remove_door_name} is not in the door list.")
+                            print()
+                            continue
+                elif choice == "N":
                     print()
                     continue
-        elif choice == "N":
-            print()
-            continue
-        else:
-            print("Invalid option please try again.")
-            print()
-            continue   
+                else:
+                    print("Invalid option please try again.")
+                    print()
+                    continue   
 
 
 def status_color(value):
