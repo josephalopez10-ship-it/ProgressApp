@@ -238,7 +238,7 @@ def list_doors():
         "P": Fore.YELLOW,
         "R": Fore.RED,
     }
-
+    # funtion that assigns a color to the pout put text depeng on user input C/complete = gree, P/pending = yellow, R/Restrianed = red
     def color_value(value):
         color = colors.get(value)
         if color is None:
@@ -247,7 +247,7 @@ def list_doors():
 
     for door in door_list:
         
-        print(f"--------------------------------------------------------------------------------------------------------------------------------------------")  # Print the door name, status, location, and restraint
+        print(f"---------------------------------------------------------------------------------------------------------------------------------------")  # Print the door name, status, location, and restraint
         print(f"Door:         {color_value(door[1])}")  # Print the door name
         print(f"Status:       {color_value(door[2])}")  # Print the door status
         print(f"Card Reader:  {color_value(door[3])}")  # Print the door card reader
@@ -255,7 +255,7 @@ def list_doors():
         print(f"Lock:         {color_value(door[5])}")  # Print the door lock
         print(f"REX:          {color_value(door[6])}")  # Print the door REX
         print(f"Restraint:    {color_value(door[7])}")  # Print the door restraint
-        print(f"--------------------------------------------------------------------------------------------------------------------------------------------\n")  # Print a separator line
+        print(f"---------------------------------------------------------------------------------------------------------------------------------------\n")  # Print a separator line
 
 # This block only runs when trackerapp_2.py is executed directly. It will not run
 # merely because another Python file imports this module.
