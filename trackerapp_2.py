@@ -61,12 +61,13 @@ def save_doors():
 
 # Basic menu function to display options to the user and call the appropriate functions based on user input
 def menu():
-    print("************************************************")
-    print("********Welcome to the Door Tracker App!********")
-    print("************************************************")
-    print()
+    print("                     ************************************************")
+    print("                     ********Welcome to the Door Tracker App!********")
+    print("                     ************************************************")
+    print(f"\n")
     print(" A - Add a door/doors, R - Remove a door/doors, E - Edit a door, L - List all doors, Q - Quit")
-    choice = input()
+    
+    choice = input("\n")
     # the users choice is not CASE-SENSITIVE in the menu, but it is CASE-SENSITIVE in the add_door() and remove_door() functions.
     if choice == "A" or choice == "a":
         add_door()
