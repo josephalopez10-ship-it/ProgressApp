@@ -151,16 +151,22 @@ def remove_door():
             list_doors()
             continue
 
-        for door in door_list:
-            if door[1] == remove_door_name:
-                door_list.remove(door)
+        print(Fore.RED+f"Are you sure you want to DELETE: "+f"{remove_door_name} [Y/N]")
+        choice = input()
+        if choice == "Y":
+            for door in door_list:
+                if door[1] == remove_door_name:
+                    door_list.remove(door)
 
-                # Save after removal so door_list.txt no longer contains the deleted door.
-                save_doors()
-                print(f"\n{remove_door_name} has been removed from the list.\n")
-                continue  # Continue the while loop to allow removing more doors or quitting.
-            
-        print(f"\n{remove_door_name} is not in the list. Please try again.\n")
+                    # Save after removal so door_list.txt no longer contains the deleted door.
+                    save_doors()
+                    print(f"\n{remove_door_name} has been removed from the list.\n")
+                    continue  # Continue the while loop to allow removing more doors or quitting.
+
+        elif choice == "N":
+            return
+        else:
+            print("Invalid option please try again.")   
 # Function to edit a doors attributes.
 def edit_door():
 
