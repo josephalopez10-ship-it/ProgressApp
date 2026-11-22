@@ -176,6 +176,19 @@ def remove_door():
             print("Invalid option please try again.")
             print()
             continue   
+
+
+def color_value(value):
+        colors = {
+                "C": Fore.GREEN,
+                "P": Fore.YELLOW,
+                "R": Fore.RED,
+            }
+        color = colors.get(value)
+        if color is None:
+            return value
+        return f"{color}{value}{Style.RESET_ALL}"
+
 # Function to edit a doors attributes.
 def edit_door():
 
@@ -200,13 +213,13 @@ def edit_door():
 
         #print all information for the chosen door so the user cna see it before editing
         print(f"You chose to edit: {door_to_edit}")
-        print(f"Name:         {found_door[1]}")
-        print(f"Status:       {found_door[2]}")
-        print(f"Card Reader:  {found_door[3]}")
-        print(f"Door Contact: {found_door[4]}")
-        print(f"Lock:         {found_door[5]}")
-        print(f"REX:          {found_door[6]}")
-        print(f"Restraint:    {found_door[7]}")
+        print(f"Name:         {color_value(found_door[1])}")
+        print(f"Status:       {color_value(found_door[2])}")
+        print(f"Card Reader:  {color_value(found_door[3])}")
+        print(f"Door Contact: {color_value(found_door[4])}")
+        print(f"Lock:         {color_value(found_door[5])}")
+        print(f"REX:          {color_value(found_door[6])}")
+        print(f"Restraint:    {color_value(found_door[7])}")
 
         # small menu of options to edit
         print("####################################################")
@@ -251,18 +264,6 @@ def edit_door():
 # Function to list all doors in the list. It prints each door name on a new line.
 def list_doors():
     print("\nList of all doors:\n")
-
-    colors = {
-        "C": Fore.GREEN,
-        "P": Fore.YELLOW,
-        "R": Fore.RED,
-    }
-    # funtion that assigns a color to the pout put text depeng on user input C/complete = gree, P/pending = yellow, R/Restrianed = red
-    def color_value(value):
-        color = colors.get(value)
-        if color is None:
-            return value
-        return f"{color}{value}{Style.RESET_ALL}"
 
     for door in door_list:
         
