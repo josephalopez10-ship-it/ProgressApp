@@ -78,7 +78,7 @@ def menu():
     elif choice == "E" or choice == "e":
         edit_door()
     elif choice == "Q" or choice == "q":
-        print(f"                         Thank you for using Tracker.")
+        print(f"                                Thank you for using Tracker.")
         global quit
         quit = False
     else:
