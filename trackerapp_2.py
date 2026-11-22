@@ -133,7 +133,7 @@ def add_door():
 
             # Immediately rewrite door_list.txt so the newly added door survives a restart.
             save_doors()
-            print(f"\n{new_door_name} has been added to the list.\n")
+            print(Fore.GREEN+f"\n{new_door_name} successfully added to the list.\n")
 
 # Function to remove a door from the list. It prompts the user for the name of the door to remove, searches for it in the door_list, and removes it if found. The user can also view the current list of doors or quit the operation.
 def remove_door():
