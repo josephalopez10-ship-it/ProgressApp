@@ -89,9 +89,8 @@ def menu():
 # Function to add a new door to the list. It prompts the user for door details then creates a new Door object and appends it to the door_list. The user can also view the current list of doors or quit the operation.
 def add_door():
     while True:
-        print("Please enter the following information: Door Name, Door Status, Door Location, Door Restraint. L - view door list, Q - quit. CHOICES ARE CASE-SENSITIVE.")
-        
-        new_door_name = input("Door Name: ")
+        print(f"Please enter the door name and the status of each device: C - Complete, P - Pending, R - Restrained")
+        new_door_name = input(f"Door Name: \n")
         if new_door_name == "Q":
             return
         
@@ -101,27 +100,27 @@ def add_door():
             list_doors()
             continue
 
-        new_door_status = input("Door Status: ")
+        new_door_status = input(f"Door Status: \n")
         if new_door_status == "Q":
             return
         
-        new_card_reader = input("Card Reader: ")
+        new_card_reader = input(f"Card Reader: \n")
         if new_card_reader == "Q":
             return
         
-        new_door_contact = input("Door Contact: ")
+        new_door_contact = input(f"Door Contact: \n")
         if new_door_contact == "Q":
             return
         
-        new_lock = input("Lock: ")
+        new_lock = input(f"Lock: \n")
         if new_lock == "Q":
             return
         
-        new_rex = input("REX: ")
+        new_rex = input(f"REX: \n")
         if new_rex == "Q":
             return
         
-        new_door_restraint = input("Door Restraint: ")
+        new_door_restraint = input("Restraint: \n")
         if new_door_restraint == "Q":
             return
         
