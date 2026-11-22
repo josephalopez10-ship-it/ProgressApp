@@ -150,9 +150,9 @@ def remove_door():
                 print(f"{remove_door_name} is not in the door list.")
                 print()
                 continue
-            elif remove_door_name == "Q" and remove_door_name != door[1]:
+            elif remove_door_name.upper() == "Q" and remove_door_name != door[1]:
                 return
-            elif remove_door_name == "L" and remove_door_name != door[1]:
+            elif remove_door_name.upper() == "L" and remove_door_name != door[1]:
                         list_doors()
                         continue
        
