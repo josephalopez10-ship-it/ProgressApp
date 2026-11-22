@@ -178,7 +178,7 @@ def remove_door():
             continue   
 
 
-def color_value(value):
+def status_color(value):
         colors = {
                 "C": Fore.GREEN,
                 "P": Fore.YELLOW,
@@ -213,13 +213,13 @@ def edit_door():
 
         #print all information for the chosen door so the user cna see it before editing
         print(f"You chose to edit: {door_to_edit}")
-        print(f"Name:         {color_value(found_door[1])}")
-        print(f"Status:       {color_value(found_door[2])}")
-        print(f"Card Reader:  {color_value(found_door[3])}")
-        print(f"Door Contact: {color_value(found_door[4])}")
-        print(f"Lock:         {color_value(found_door[5])}")
-        print(f"REX:          {color_value(found_door[6])}")
-        print(f"Restraint:    {color_value(found_door[7])}")
+        print(f"Name:         {status_color(found_door[1])}")
+        print(f"Status:       {status_color(found_door[2])}")
+        print(f"Card Reader:  {status_color(found_door[3])}")
+        print(f"Door Contact: {status_color(found_door[4])}")
+        print(f"Lock:         {status_color(found_door[5])}")
+        print(f"REX:          {status_color(found_door[6])}")
+        print(f"Restraint:    {status_color(found_door[7])}")
 
         # small menu of options to edit
         print("####################################################")
@@ -268,13 +268,13 @@ def list_doors():
     for door in door_list:
         
         print(f"---------------------------------------------------------------------------------------------------------------------------------------")  # Print the door name, status, location, and restraint
-        print(f"Door:         {color_value(door[1])}")  # Print the door name
-        print(f"Status:       {color_value(door[2])}")  # Print the door status
-        print(f"Card Reader:  {color_value(door[3])}")  # Print the door card reader
-        print(f"Door Contact: {color_value(door[4])}")  # Print the door contact
-        print(f"Lock:         {color_value(door[5])}")  # Print the door lock
-        print(f"REX:          {color_value(door[6])}")  # Print the door REX
-        print(f"Restraint:    {color_value(door[7])}")  # Print the door restraint
+        print(f"Door:         {status_color(door[1])}")  # Print the door name
+        print(f"Status:       {status_color(door[2])}")  # Print the door status
+        print(f"Card Reader:  {status_color(door[3])}")  # Print the door card reader
+        print(f"Door Contact: {status_color(door[4])}")  # Print the door contact
+        print(f"Lock:         {status_color(door[5])}")  # Print the door lock
+        print(f"REX:          {status_color(door[6])}")  # Print the door REX
+        print(f"Restraint:    {status_color(door[7])}")  # Print the door restraint
         print(f"---------------------------------------------------------------------------------------------------------------------------------------\n")  # Print a separator line
 
 # This block only runs when trackerapp_2.py is executed directly. It will not run
