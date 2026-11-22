@@ -105,27 +105,27 @@ def add_door():
             list_doors()
             continue
 
-        new_door_status = input(f"Door Status: \n")
+        new_door_status = input(f"Door Status: \n").upper()
         if new_door_status == "Q":
             return
         
-        new_card_reader = input(f"Card Reader: \n")
+        new_card_reader = input(f"Card Reader: \n").upper()
         if new_card_reader == "Q":
             return
         
-        new_door_contact = input(f"Door Contact: \n")
+        new_door_contact = input(f"Door Contact: \n").upper()
         if new_door_contact == "Q":
             return
         
-        new_lock = input(f"Lock: \n")
+        new_lock = input(f"Lock: \n").upper()
         if new_lock == "Q":
             return
         
-        new_rex = input(f"REX: \n")
+        new_rex = input(f"REX: \n").upper()
         if new_rex == "Q":
             return
         
-        new_door_restraint = input("Restraint: \n")
+        new_door_restraint = input("Restraint: \n").upper()
         if new_door_restraint == "Q":
             return
         
