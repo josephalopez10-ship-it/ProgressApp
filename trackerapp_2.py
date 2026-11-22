@@ -92,6 +92,7 @@ def menu():
 def add_door():
     while True:
         print(f"Please enter the door name and the status of each device: C - Complete, P - Pending, R - Restrained, N - N/a")
+        print()
         new_door_name = input(f"Door Name: \n")
         if new_door_name == "Q":
             return
@@ -140,6 +141,7 @@ def remove_door():
         print("Please enter the name of the door you would like to remove. L - view door list, Q - quit. CHOICES ARE CASE-SENSITIVE.")
         
         remove_door_name = input("Door Name: ")
+        print()
         if remove_door_name == "Q":
             return
         
@@ -164,6 +166,7 @@ def edit_door():
 
     while True:
         door_to_edit = input(f"Enter the name of the door to edit:\n")
+        print()
 
         if door_to_edit == "Q":
             return
@@ -195,6 +198,7 @@ def edit_door():
         print(f"N - Door name, S - Status, C - Card Reader")
         print(f"D - Door Contact, L - Lock, E - REX, R - Restraint")
         print("####################################################\n")
+        print()
         choice = input(f"What would you like to edit?\n")
 
         #tupel of options to choose from
