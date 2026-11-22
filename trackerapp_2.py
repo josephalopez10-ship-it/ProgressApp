@@ -160,15 +160,19 @@ def remove_door():
 
                     # Save after removal so door_list.txt no longer contains the deleted door.
                     save_doors()
-                    print(f"\n{remove_door_name} has been removed from the list.\n")
+                    print(Fore.RED+f"\n{remove_door_name} has been DELETED from the list.\n")
+                    print()
                     continue  # Continue the while loop to allow removing more doors or quitting.
                 else:
                     print(f"{remove_door_name} is not in the door list.")
+                    print()
                     continue
         elif choice == "N":
+            print()
             continue
         else:
             print("Invalid option please try again.")
+            print()
             continue   
 # Function to edit a doors attributes.
 def edit_door():
