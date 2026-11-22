@@ -66,8 +66,8 @@ def menu():
     print("                     ************************************************")
     print(f"\n")
     print(" A - Add a door/doors, R - Remove a door/doors, E - Edit a door, L - List all doors, Q - Quit")
-    
-    choice = input("\n")
+
+    choice = input(f"\n")
     # the users choice is not CASE-SENSITIVE in the menu, but it is CASE-SENSITIVE in the add_door() and remove_door() functions.
     if choice == "A" or choice == "a":
         add_door()
@@ -78,7 +78,7 @@ def menu():
     elif choice == "E" or choice == "e":
         edit_door()
     elif choice == "Q" or choice == "q":
-        print("Thank you for using Tracker.")
+        print(f"                         Thank you for using Tracker.")
         global quit
         quit = False
     else:
