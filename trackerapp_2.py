@@ -162,11 +162,14 @@ def remove_door():
                     save_doors()
                     print(f"\n{remove_door_name} has been removed from the list.\n")
                     continue  # Continue the while loop to allow removing more doors or quitting.
-
+                else:
+                    print(f"{remove_door_name} is not in the door list.")
+                    continue
         elif choice == "N":
-            return
+            continue
         else:
-            print("Invalid option please try again.")   
+            print("Invalid option please try again.")
+            continue   
 # Function to edit a doors attributes.
 def edit_door():
 
