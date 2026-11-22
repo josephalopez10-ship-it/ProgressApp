@@ -1,4 +1,6 @@
 #ADD DEVICES TO DOORS
+from colorama import Fore, Style, init
+init(autoreset=True)
 
 # Path provides a safe, platform-independent way to work with file and folder names.
 from pathlib import Path
@@ -230,15 +232,29 @@ def edit_door():
 # Function to list all doors in the list. It prints each door name on a new line.
 def list_doors():
     print("\nList of all doors:\n")
+
+    colors = {
+        "C": Fore.GREEN,
+        "P": Fore.YELLOW,
+        "R": Fore.RED,
+    }
+
+    def color_value(value):
+        color = colors.get(value)
+        if color is None:
+            return value
+        return f"{color}{value}{Style.RESET_ALL}"
+
     for door in door_list:
+        
         print(f"--------------------------------------------------------------------------------------------------------------------------------------------")  # Print the door name, status, location, and restraint
-        print(f"Door:         {door[1]}")  # Print the door name
-        print(f"Status:       {door[2]}")  # Print the door status
-        print(f"Card Reader:  {door[3]}")  # Print the door card reader
-        print(f"Door Contact: {door[4]}")  # Print the door contact
-        print(f"Lock:         {door[5]}")  # Print the door lock
-        print(f"REX:          {door[6]}")  # Print the door REX
-        print(f"Restraint:    {door[7]}")  # Print the door restraint
+        print(f"Door:         {color_value(door[1])}")  # Print the door name
+        print(f"Status:       {color_value(door[2])}")  # Print the door status
+        print(f"Card Reader:  {color_value(door[3])}")  # Print the door card reader
+        print(f"Door Contact: {color_value(door[4])}")  # Print the door contact
+        print(f"Lock:         {color_value(door[5])}")  # Print the door lock
+        print(f"REX:          {color_value(door[6])}")  # Print the door REX
+        print(f"Restraint:    {color_value(door[7])}")  # Print the door restraint
         print(f"--------------------------------------------------------------------------------------------------------------------------------------------\n")  # Print a separator line
 
 # This block only runs when trackerapp_2.py is executed directly. It will not run
