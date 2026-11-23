@@ -1,6 +1,0 @@
-Main Entrance, C, C, C, C, C, N
-Lobby Stairwell, P, C, P, P, N, N
-Server Room, C, C, C, C, C, C
-Loading Dock, R, P, C, R, P, R
-Break Room, P, P, P, P, P, N
-Roof Access, N, N, C, C, N, N
