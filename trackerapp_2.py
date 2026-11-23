@@ -58,7 +58,7 @@ def menu():
 #functions that handles checking if the door that the user has inputed is in the door list.
 def find_door(name):
     for door in door_list:
-        if door[1] == name:
+        if door.name == name:
             return door
     return None
 
@@ -83,16 +83,8 @@ def load_doors():
 
                 # Store both the Door object and its individual values. The object is used
                 # for saving, while the individual values are used by the existing menu code.
-                door_list.append([
-                    door,
-                    door.name,
-                    door.status,
-                    door.card_reader,
-                    door.door_contact,
-                    door.lock,
-                    door.rex,
-                    door.restraint,
-                ])
+                door_list.append(door)
+
     except FileNotFoundError:
         # If the file does not exist yet, create an empty file so future saves can use it.
         FILE_PATH.touch()
@@ -102,9 +94,9 @@ def save_doors():
     # Open in write mode ("w"), which replaces the old file contents instead of appending.
     with FILE_PATH.open("w", encoding="utf-8") as file:
         for door in door_list:
-            # door[0] is the Door object in each saved list entry. Convert it to one
+            
             # text line and add a newline so each door is stored on a separate line.
-            file.write(door[0].to_single_line() + "\n")
+            file.write(door.to_single_line() + "\n")
 
 # Function to add a new door to the list. It prompts the user for door details then creates a new Door object and appends it to the door_list. The user can also view the current list of doors or quit the operation.
 def add_door():
@@ -151,7 +143,7 @@ def add_door():
         
         else:
             new_door = Door(new_door_name, new_door_status, new_card_reader, new_door_contact, new_lock, new_rex, new_door_restraint)
-            door_list.append([new_door, new_door_name,new_door_status, new_card_reader, new_door_contact, new_lock, new_rex, new_door_restraint])
+            door_list.append(new_door)
 
             # Immediately rewrite door_list.txt so the newly added door survives a restart.
             save_doors()
@@ -208,13 +200,13 @@ def edit_door():
 
         #print all information for the chosen door so the user cna see it before editing
         print(f"You chose to edit: {door_to_edit}")
-        print(f"Name:         {status_color(found_door[1])}")
-        print(f"Status:       {status_color(found_door[2])}")
-        print(f"Card Reader:  {status_color(found_door[3])}")
-        print(f"Door Contact: {status_color(found_door[4])}")
-        print(f"Lock:         {status_color(found_door[5])}")
-        print(f"REX:          {status_color(found_door[6])}")
-        print(f"Restraint:    {status_color(found_door[7])}")
+        print(f"Name:         {status_color(found_door.name)}")
+        print(f"Status:       {status_color(found_door.status)}")
+        print(f"Card Reader:  {status_color(found_door.card_reader)}")
+        print(f"Door Contact: {status_color(found_door.door_contact)}")
+        print(f"Lock:         {status_color(found_door.lock)}")
+        print(f"REX:          {status_color(found_door.rex)}")
+        print(f"Restraint:    {status_color(found_door.restraint)}")
 
         # small menu of options to edit
         print("####################################################")
@@ -224,15 +216,16 @@ def edit_door():
         print()
         choice = input(f"What would you like to edit?\n")
 
+
         #tupel of options to choose from
         options_to_edit = {
-            "N": (1, "name", "Door name"),
-            "S": (2, "status", "Status"),
-            "C": (3, "card_reader", "Card Reader"),
-            "D": (4, "door_contact", "Door Contact"),
-            "L": (5, "lock", "Lock"),
-            "E": (6, "rex", "REX"),
-            "R": (7, "restraint", "Restraint"),
+            "N": ("name", "Door name"),
+            "S": ("status", "Status"),
+            "C": ("card_reader", "Card Reader"),
+            "D": ("door_contact", "Door Contact"),
+            "L": ("lock", "Lock"),
+            "E": ("rex", "REX"),
+            "R": ("restraint", "Restraint"),
         }
 
         if choice == "Q":
@@ -243,15 +236,21 @@ def edit_door():
             continue
     
         # print the door and antribute of the door that is being edited
-        index, attribute, label = options_to_edit[choice]
-        print(f"Editing door: {found_door[1]}, {label}:")
-        new_label = input(f"Enter updated information.\n")
+        attribute, label = options_to_edit[choice]
+        print(f"\nEditing door: {found_door.name}, {label}:\n")
+        new_label = input(f"\nEnter updated information.\n")
 
+        if choice != "N":
+            new_label = new_label.upper()
+
+        # check if the new name chosen by the user is int he list
+        if choice == "N" and find_door(new_label) is not None:
+            print(f"\n{new_label} already exists in the list. Please choose another name.\n")
+            continue
         if new_label == "Q":
             continue
 
-        found_door[index] = new_label
-        setattr(found_door[0], attribute, new_label)
+        setattr(found_door, attribute, new_label)
         save_doors()
         print(f"Data has been updated.\n")
         
@@ -262,13 +261,13 @@ def list_doors():
     for door in door_list:
         
         print(f"---------------------------------------------------------------------------------------------------------------------------------------")  # Print the door name, status, location, and restraint
-        print(f"Door:         {status_color(door[1])}")  # Print the door name
-        print(f"Status:       {status_color(door[2])}")  # Print the door status
-        print(f"Card Reader:  {status_color(door[3])}")  # Print the door card reader
-        print(f"Door Contact: {status_color(door[4])}")  # Print the door contact
-        print(f"Lock:         {status_color(door[5])}")  # Print the door lock
-        print(f"REX:          {status_color(door[6])}")  # Print the door REX
-        print(f"Restraint:    {status_color(door[7])}")  # Print the door restraint
+        print(f"Door:         {status_color(door.name)}")  # Print the door name
+        print(f"Status:       {status_color(door.status)}")  # Print the door status
+        print(f"Card Reader:  {status_color(door.card_reader)}")  # Print the door card reader
+        print(f"Door Contact: {status_color(door.door_contact)}")  # Print the door contact
+        print(f"Lock:         {status_color(door.lock)}")  # Print the door lock
+        print(f"REX:          {status_color(door.rex)}")  # Print the door REX
+        print(f"Restraint:    {status_color(door.restraint)}")  # Print the door restraint
         print(f"---------------------------------------------------------------------------------------------------------------------------------------\n")  # Print a separator line
 
 # This block only runs when trackerapp_2.py is executed directly. It will not run
