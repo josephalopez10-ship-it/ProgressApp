@@ -16,8 +16,14 @@ import tkinter as tk
 from tkinter import ttk
 # messagebox shows pop-up error and confirmation boxes.
 from tkinter import messagebox
+# filedialog opens the standard "Save as" window to pick where to save a file.
+from tkinter import filedialog
+# date gives today's date, used in the report's file name.
+from datetime import date
 # The Door class, to create new doors.
 from door import Door
+# Our own report.py, which builds the PDF report.
+import report
 # Reuse the door list and the load/save functions from the terminal version.
 # "as data" means we write data.door_list, data.save_doors(), and so on.
 import trackerapp_2 as data
@@ -458,6 +464,31 @@ def remove_selected_door():
     confirm_and_delete_door(door, window)
 
 
+# Save a PDF report of every door. Runs when Export PDF is clicked.
+def export_report():
+    # Open a "Save as" window. It gives back the chosen file path, or nothing
+    # if the user clicks Cancel. date.today() puts today's date in the
+    # suggested name, like door_report_2026-11-23.pdf
+    file_path = filedialog.asksaveasfilename(parent=window, title="Save report as",
+                                             defaultextension=".pdf",
+                                             filetypes=[("PDF files", "*.pdf")],
+                                             initialfile=f"door_report_{date.today()}.pdf")
+    # "not file_path" is True when it's empty, meaning Cancel was clicked.
+    if not file_path:
+        return
+
+    # try/except catches errors, like saving to a folder you're not allowed
+    # to write in, and shows a pop-up instead of crashing.
+    try:
+        report.make_pdf_report(data.door_list, file_path, summary_label.cget("text"))
+    except OSError as error:
+        messagebox.showerror("Could not save", f"The report could not be saved:\n{error}")
+        return
+
+    # showinfo is a pop-up with just an OK button.
+    messagebox.showinfo("Report saved", f"Report saved to:\n{file_path}")
+
+
 ##########################################################################
 # Build the main window. Everything below runs once, when the app starts.
 ##########################################################################
@@ -481,6 +512,7 @@ button_frame.pack(side="bottom", fill="x", padx=10, pady=(0, 10))
 tk.Button(button_frame, text="Add Door", command=open_add_door).pack(side="left")
 # padx=(10, 0) puts 10 pixels of space on the left of the button, none on the right.
 tk.Button(button_frame, text="Edit Door", command=open_edit_door).pack(side="left", padx=(10, 0))
+tk.Button(button_frame, text="Export PDF", command=export_report).pack(side="left", padx=(10, 0))
 # side="right" puts Remove Door on the far right, away from Add and Edit,
 # so it's harder to click by accident.
 tk.Button(button_frame, text="Remove Door", command=remove_selected_door).pack(side="right")

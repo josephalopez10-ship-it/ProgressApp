@@ -16,7 +16,7 @@ import tempfile
 import json
 from pathlib import Path
 import tkinter as tk
-from tkinter import ttk, messagebox
+from tkinter import ttk, messagebox, filedialog
 
 from door import Door
 import trackerapp_2 as data
@@ -654,6 +654,56 @@ class TestGuiSummary(GuiTestBase):
         self.assertEqual(self.summary(),
                          "0 doors: 0 complete, 0 pending, 0 restrained\n"
                          "Devices: 0 of 0 complete (0%)")
+
+
+# ---------------------------------------------------------------------------
+# The Export PDF button
+# ---------------------------------------------------------------------------
+class TestGuiExport(GuiTestBase):
+
+    SAVED_DOORS = [
+        {"name": "Main Entrance", "devices": {"Card Reader": "C", "REX": "N"}},
+        {"name": "Loading Dock", "devices": {"Restraint": "R"}},
+    ]
+
+    def setUp(self):
+        super().setUp()
+        # Replace the "Save as" window and the "Report saved" pop-up, so the
+        # tests don't stop and wait for clicks. self.save_as_answer is the
+        # path the fake "Save as" window gives back ("" means Cancel).
+        self.save_as_answer = ""
+        self.real_asksaveasfilename = filedialog.asksaveasfilename
+        filedialog.asksaveasfilename = lambda **options: self.save_as_answer
+        self.info_messages = []
+        self.real_showinfo = messagebox.showinfo
+        messagebox.showinfo = lambda title, message, **options: self.info_messages.append(message)
+
+    def tearDown(self):
+        filedialog.asksaveasfilename = self.real_asksaveasfilename
+        messagebox.showinfo = self.real_showinfo
+        super().tearDown()
+
+    def test_cancel_saves_nothing(self):
+        self.gui["export_report"]()
+        self.assertEqual(self.info_messages, [])
+        self.assertEqual(self.errors, [])
+
+    def test_export_makes_a_pdf(self):
+        pdf_path = Path(self.temp_folder.name) / "report.pdf"
+        self.save_as_answer = str(pdf_path)
+        self.gui["export_report"]()
+
+        self.assertEqual(self.errors, [])
+        self.assertEqual(self.info_messages, [f"Report saved to:\n{pdf_path}"])
+        # Every PDF file starts with the characters "%PDF".
+        self.assertTrue(pdf_path.read_bytes().startswith(b"%PDF"))
+
+    def test_folder_that_does_not_exist_shows_error(self):
+        self.save_as_answer = str(Path(self.temp_folder.name) / "no_such_folder" / "report.pdf")
+        self.gui["export_report"]()
+        self.assertEqual(len(self.errors), 1)
+        self.assertTrue(self.errors[0].startswith("The report could not be saved"))
+        self.assertEqual(self.info_messages, [])
 
 
 # This lets you also run the file directly: .venv/bin/python test_tracker.py
