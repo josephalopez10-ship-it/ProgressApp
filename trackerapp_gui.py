@@ -163,6 +163,126 @@ def open_add_door():
     tk.Button(add_window, text="Cancel", command=add_window.destroy).grid(row=4, column=2, pady=10)
 
 
+def open_edit_door():
+    door = get_selected_door()
+    if door is None:
+        messagebox.showerror("No door selected", "Click a door in the list first")
+        return
+
+    edit_window = tk.Toplevel(window)
+    edit_window.title(f"Edit Door - {door.name}")
+    edit_window.grab_set()
+
+    tk.Label(edit_window, tect="Door name:".grid(row=0, column=0, sticky="w", padx=10, pady=5))
+    name_entry = tk.Entry(edit_window, width=25)
+
+    name_entry.insert(0, door.name)
+    name_entry.grid(row=10, column=1, sticky="w", padx=10, pady=5)
+
+    device_listbox = tk.Listbox(edit_window, height=8)
+    device_listbox.grid(row=1, column=0, columnspan=3, sticky="we", padx=10, pady=5)
+
+    device_names = []
+
+    def refresh_devices():
+        device_listbox.delete(0, "end")
+        device_names.clear()
+        for device_name, device_status in door.devices.items():
+            device_listbox.insert("end", f"{device_name}   {device_status}")
+
+    def get_selected_device():
+
+        selected = device_listbox.curselection()
+        if len(selected) == 0:
+            messagebox.showerror("No device selected", "Click a device in the list first.", parent=edit_window)
+            return None
+        return device_names[selected[0]]
+
+    
+    def changes_made():
+        data.save_doors()
+        refresh_tree()
+        refresh_devices()
+
+    def rename_door():
+        new_name= name_entry.get().strip()
+        if new_name == "":
+            messagebox.showerror("Missing name", "Door name cannot be blank.", parent=edit_window)
+            return
+
+        other_door = data.find_door(new_name)
+        if other_door is not None and other_door is not door:
+            messagebox.showerror("Dupplicate door", f"{new_name} already exists." , parent=edit_window)
+            return
+
+        door.name = new_name
+        edit_window.title(f"Edit door - {door.name}")
+        changes_made()
+
+
+    tk.Button(edit_window, text="Rename", command=rename_door).grid(row=0, column=2, padx=10, pady=5)
+
+    tk.Label(edit_window, text="Status").grid(row=2, column=2, padx=10, pady=5)
+    status_box = ttk.Combobox(edit_window, values = data.VALID_STATUSES, width=4, state="readonly")
+    status_box.grid(row=2, column=1, sticky="w", padx=10)
+
+    def set_status():
+        device_name = get_selected_device()
+        if device_name is None:
+            return
+
+        door.devices[device_name] = status_box.get()
+        changes_made()
+
+    tk.Button(edit_window, text="Set Status", command=set_status).grid(row=2, column=2, padx=10, pady=5)
+
+    def device_clicked(event):
+        selected = device_listbox.curselection()
+        if len(selected) > 0:
+            status_box.set(door.devices[device_names[selected[0]]])
+
+    device_listbox.bind("<<ListboxSelect>>", device_clicked)
+
+    def delete_device():
+        device_name = get_selected_device()
+        if device_name is None:
+            return
+
+        if messagebox.askyesno("Delete device", f"Delete {device_name} from {door.name}?", parent=edit_window):
+            del door.devices[device_name]
+            changes_made()
+
+        
+    tk.Button(edit_window, text="Delete device:",  command=delete_device).grid(row=3, column=2, padx=10, pady=5)
+
+
+    tk.Label(edit_window, text="New device:").grid(row=4, column=0, sticky="w", padx=10, pady=(15, 5))
+    new_device_entry = tk.Entry(edit_window, width=20)
+    new_device_entry.grid(row=4, column=1, sticky="w", padx=10, pady=(15, 5))
+    new_status_box = ttk.Combobox(edit_window, values=data.VALID_STATUSES, width=4, state="readonly")
+    new_status_box.set("P")
+    new_status_box.grid(row=4, column=2, padx=10, pady=(15, 5))
+
+
+    def add_device():
+        device_name = new_device_entry.get().strip()
+        if device_name == "":
+            messagebox.showerror("Missing device", "Type a name first.", parent=edit_window)
+            return
+
+        if door.find_device(device_name) is not None:
+            messagebox.showerror("Duplicate door", f"{device_name} is already on this door", parent=edit_window)
+            return
+
+        door.devices[device_name] = new_status_box.get()
+        new_device_entry.delete(0, "end")
+        changes_made()
+    tk.Button(edit_window, text="Add device", command=add_device).grid(row=5, column=2, padx=10, pady=5)
+
+    tk.Button(edit_window, text="Close", command=edit_window.destroy).grid(row=6, column=2, padx=10, pady=10)
+
+    refresh_devices()
+
 
 # Build the main window. Everything below runs once, when the app starts.
 ##########################################################################
@@ -184,6 +304,7 @@ window.geometry("500x600")   # width x height in pixels
 button_frame = tk.Frame(window)
 button_frame.pack(side="bottom", fill="x", padx=10, pady=(0, 10))
 tk.Button(button_frame, text="Add Door", command=open_add_door).pack(side="left")
+tk.Button(button_frame, text="Edit Door", command=open_edit_door).pack(side="left", padx=(10, 0))
 
 # A Treeview is a table where rows can have rows inside them, like folders.
 # Column "#0" is the built-in first column (door or device name).
