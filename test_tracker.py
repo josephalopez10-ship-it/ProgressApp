@@ -170,22 +170,33 @@ class TestSaveAndLoad(UsesTempSaveFile):
 
 
 # ---------------------------------------------------------------------------
-# The GUI's Add door window
-# These tests build the real window and "click" its buttons with .invoke(),
-# but never call mainloop(), so nothing stays open on screen.
+# A base class for the GUI tests.
+# It builds the real window and lets tests "click" buttons with .invoke(),
+# but never calls mainloop(), so nothing stays open on screen.
+# It has no test_ methods of its own, so it doesn't run any tests itself.
 # ---------------------------------------------------------------------------
-class TestGuiAddDoor(UsesTempSaveFile):
+class GuiTestBase(UsesTempSaveFile):
+
+    # The doors in the save file when the GUI starts. A test class can
+    # replace this with its own list.
+    SAVED_DOORS = [{"name": "Joes Door", "devices": {"Lock": "P"}}]
 
     def setUp(self):
         super().setUp()
-        # Put one door in the save file before the GUI loads it.
-        self.write_save_file(json.dumps([{"name": "Joes Door", "devices": {"Lock": "P"}}]))
+        # Put the starting doors in the save file before the GUI loads it.
+        self.write_save_file(json.dumps(self.SAVED_DOORS))
 
         # Replace the pop-up error box with one that just records the message,
         # so the tests don't stop and wait for someone to click OK.
         self.errors = []
         self.real_showerror = messagebox.showerror
         messagebox.showerror = lambda title, message, **options: self.errors.append(message)
+
+        # Replace the Yes/No pop-up with one that answers by itself.
+        # A test sets self.answer_yes = False to "click No".
+        self.answer_yes = True
+        self.real_askyesno = messagebox.askyesno
+        messagebox.askyesno = lambda title, message, **options: self.answer_yes
 
         # Run trackerapp_gui.py with mainloop() switched off, so it builds the
         # window and then returns instead of waiting for clicks.
@@ -203,14 +214,38 @@ class TestGuiAddDoor(UsesTempSaveFile):
             self.gui["window"].destroy()
         tk.Tk.mainloop = self.real_mainloop
         messagebox.showerror = self.real_showerror
+        messagebox.askyesno = self.real_askyesno
         super().tearDown()
+
+    # Helper: list every row in the main table as (name, status, [devices]).
+    def table_rows(self):
+        tree = self.gui["tree"]
+        rows = []
+        for door_row in tree.get_children():
+            devices = [tree.item(row, "text") + "=" + tree.item(row, "values")[0]
+                       for row in tree.get_children(door_row)]
+            rows.append((tree.item(door_row, "text"), tree.item(door_row, "values")[0], devices))
+        return rows
+
+    # Helper: read the save file back as a list of dictionaries.
+    def saved_file(self):
+        return json.loads(data.FILE_PATH.read_text(encoding="utf-8"))
+
+    # Helper: the newest Toplevel (pop-up) window that's open.
+    def newest_window(self):
+        window = self.gui["window"]
+        return [w for w in window.winfo_children() if isinstance(w, tk.Toplevel)][-1]
+
+
+# ---------------------------------------------------------------------------
+# The GUI's main table and Add door window
+# ---------------------------------------------------------------------------
+class TestGuiAddDoor(GuiTestBase):
 
     # Helper: open the Add door window and find its boxes and buttons.
     def open_add_window(self):
         self.gui["open_add_door"]()
-        window = self.gui["window"]
-        # The newest Toplevel window is the Add door window.
-        add_window = [w for w in window.winfo_children() if isinstance(w, tk.Toplevel)][-1]
+        add_window = self.newest_window()
         widgets = add_window.winfo_children()
         # The two text boxes, in the order they were created: name, then device.
         name_entry, device_entry = [w for w in widgets if type(w) is tk.Entry]
@@ -224,16 +259,6 @@ class TestGuiAddDoor(UsesTempSaveFile):
         device_entry.insert(0, name)
         status_box.set(status)
         buttons["Add Device"].invoke()
-
-    # Helper: list every row in the main table as (name, status, [devices]).
-    def table_rows(self):
-        tree = self.gui["tree"]
-        rows = []
-        for door_row in tree.get_children():
-            devices = [tree.item(row, "text") + "=" + tree.item(row, "values")[0]
-                       for row in tree.get_children(door_row)]
-            rows.append((tree.item(door_row, "text"), tree.item(door_row, "values")[0], devices))
-        return rows
 
     def test_table_shows_saved_doors(self):
         self.assertEqual(self.table_rows(), [("Joes Door", "P", ["Lock=P"])])
@@ -249,8 +274,7 @@ class TestGuiAddDoor(UsesTempSaveFile):
         # The new door shows in the table...
         self.assertIn(("Stair 2", "R", ["Card Reader=C", "Lock=R"]), self.table_rows())
         # ...is saved to the file...
-        saved = json.loads(data.FILE_PATH.read_text(encoding="utf-8"))
-        self.assertIn({"name": "Stair 2", "devices": {"Card Reader": "C", "Lock": "R"}}, saved)
+        self.assertIn({"name": "Stair 2", "devices": {"Card Reader": "C", "Lock": "R"}}, self.saved_file())
         # ...and the Add door window closed.
         self.assertFalse(add_window.winfo_exists())
 
@@ -286,6 +310,178 @@ class TestGuiAddDoor(UsesTempSaveFile):
         buttons["Cancel"].invoke()
         self.assertEqual(len(data.door_list), 1)
         self.assertFalse(add_window.winfo_exists())
+
+
+# ---------------------------------------------------------------------------
+# The GUI's Edit door window
+# ---------------------------------------------------------------------------
+class TestGuiEditDoor(GuiTestBase):
+
+    # Start these tests with two doors.
+    SAVED_DOORS = [
+        {"name": "Joes Door", "devices": {"Card Reader": "C", "Lock": "P", "REX": "P"}},
+        {"name": "alex door", "devices": {"Sounder": "R"}},
+    ]
+
+    # Helper: click a door's row in the main table.
+    def select_door(self, name):
+        tree = self.gui["tree"]
+        for row in tree.get_children():
+            if tree.item(row, "text") == name:
+                tree.selection_set(row)
+                return row
+
+    # Helper: select a door, click Edit Door, and find the Edit window's
+    # boxes and buttons. Returns them in a dictionary.
+    def open_edit_window(self, door_name):
+        self.select_door(door_name)
+        self.gui["open_edit_door"]()
+        edit_window = self.newest_window()
+        widgets = edit_window.winfo_children()
+        # Text boxes and dropdowns, in the order they were created.
+        name_entry, new_device_entry = [w for w in widgets if type(w) is tk.Entry]
+        status_box, new_status_box = [w for w in widgets if isinstance(w, ttk.Combobox)]
+        return {
+            "window": edit_window,
+            "name": name_entry,
+            "new_device": new_device_entry,
+            "status": status_box,
+            "new_status": new_status_box,
+            "devices": [w for w in widgets if isinstance(w, tk.Listbox)][0],
+            "buttons": {w.cget("text"): w for w in widgets if isinstance(w, tk.Button)},
+        }
+
+    # Helper: click a device in the Edit window's device list.
+    def click_device(self, edit, device_name):
+        listbox = edit["devices"]
+        for row_number in range(listbox.size()):
+            if listbox.get(row_number).startswith(device_name + "   "):
+                listbox.selection_clear(0, "end")
+                listbox.selection_set(row_number)
+                # Send the same event a real click sends, then let tkinter handle it.
+                listbox.event_generate("<<ListboxSelect>>")
+                edit["window"].update()
+                return
+
+    # Helper: the status of one door in the main table.
+    def table_status(self, door_name):
+        for name, status, devices in self.table_rows():
+            if name == door_name:
+                return status
+
+    def test_nothing_selected_shows_error(self):
+        self.gui["open_edit_door"]()
+        self.assertEqual(self.errors, ["Click a door in the list first"])
+
+    def test_device_row_opens_its_door(self):
+        tree = self.gui["tree"]
+        door_row = self.select_door("alex door")
+        # Click the first device row under alex door instead of the door itself.
+        tree.selection_set(tree.get_children(door_row)[0])
+        self.gui["open_edit_door"]()
+        self.assertEqual(self.newest_window().title(), "Edit Door - alex door")
+
+    def test_clicking_device_shows_its_status(self):
+        edit = self.open_edit_window("Joes Door")
+        self.click_device(edit, "Card Reader")
+        self.assertEqual(edit["status"].get(), "C")
+        self.click_device(edit, "Lock")
+        self.assertEqual(edit["status"].get(), "P")
+
+    def test_set_status_updates_table_and_file(self):
+        edit = self.open_edit_window("Joes Door")
+        self.click_device(edit, "Lock")
+        edit["status"].set("C")
+        edit["buttons"]["Set Status"].invoke()
+        self.click_device(edit, "REX")
+        edit["status"].set("C")
+        edit["buttons"]["Set Status"].invoke()
+
+        self.assertEqual(self.errors, [])
+        # All devices are C now, so the door turns C.
+        self.assertEqual(self.table_status("Joes Door"), "C")
+        self.assertEqual(self.saved_file()[0]["devices"], {"Card Reader": "C", "Lock": "C", "REX": "C"})
+
+    def test_set_status_with_no_device_selected(self):
+        edit = self.open_edit_window("Joes Door")
+        edit["status"].set("C")
+        edit["buttons"]["Set Status"].invoke()
+        self.assertEqual(self.errors, ["Click a device in the list first."])
+
+    def test_add_device(self):
+        edit = self.open_edit_window("Joes Door")
+        edit["new_device"].insert(0, "Power Supply")
+        edit["new_status"].set("N")
+        edit["buttons"]["Add device"].invoke()
+
+        self.assertEqual(self.errors, [])
+        self.assertIn("Power Supply=N", self.table_rows()[0][2])
+        self.assertEqual(self.saved_file()[0]["devices"]["Power Supply"], "N")
+        # The box is emptied, ready for the next device.
+        self.assertEqual(edit["new_device"].get(), "")
+
+    def test_add_duplicate_device_is_blocked(self):
+        edit = self.open_edit_window("Joes Door")
+        edit["new_device"].insert(0, "card reader")
+        edit["buttons"]["Add device"].invoke()
+        self.assertEqual(self.errors, ["card reader is already on this door"])
+
+    def test_add_blank_device_is_blocked(self):
+        edit = self.open_edit_window("Joes Door")
+        edit["buttons"]["Add device"].invoke()
+        self.assertEqual(self.errors, ["Type a name first."])
+
+    def test_delete_device_yes(self):
+        edit = self.open_edit_window("alex door")
+        self.click_device(edit, "Sounder")
+        edit["buttons"]["Delete device"].invoke()
+        self.assertEqual(self.saved_file()[1]["devices"], {})
+        self.assertEqual(edit["devices"].size(), 0)
+
+    def test_delete_device_no_keeps_it(self):
+        self.answer_yes = False
+        edit = self.open_edit_window("alex door")
+        self.click_device(edit, "Sounder")
+        edit["buttons"]["Delete device"].invoke()
+        self.assertEqual(data.door_list[1].devices, {"Sounder": "R"})
+
+    def test_rename(self):
+        edit = self.open_edit_window("Joes Door")
+        edit["name"].delete(0, "end")
+        edit["name"].insert(0, "Main Entrance")
+        edit["buttons"]["Rename"].invoke()
+
+        self.assertEqual(self.errors, [])
+        self.assertEqual(self.table_rows()[0][0], "Main Entrance")
+        self.assertEqual(self.saved_file()[0]["name"], "Main Entrance")
+        self.assertEqual(edit["window"].title(), "Edit Door - Main Entrance")
+
+    def test_rename_to_other_door_is_blocked(self):
+        edit = self.open_edit_window("Joes Door")
+        edit["name"].delete(0, "end")
+        edit["name"].insert(0, "ALEX DOOR")
+        edit["buttons"]["Rename"].invoke()
+        self.assertEqual(self.errors, ["ALEX DOOR already exists."])
+        self.assertEqual(data.door_list[0].name, "Joes Door")
+
+    def test_rename_can_fix_own_capitals(self):
+        edit = self.open_edit_window("Joes Door")
+        edit["name"].delete(0, "end")
+        edit["name"].insert(0, "JOES DOOR")
+        edit["buttons"]["Rename"].invoke()
+        self.assertEqual(self.errors, [])
+        self.assertEqual(data.door_list[0].name, "JOES DOOR")
+
+    def test_rename_blank_is_blocked(self):
+        edit = self.open_edit_window("Joes Door")
+        edit["name"].delete(0, "end")
+        edit["buttons"]["Rename"].invoke()
+        self.assertEqual(self.errors, ["Door name cannot be blank."])
+
+    def test_close(self):
+        edit = self.open_edit_window("Joes Door")
+        edit["buttons"]["Close"].invoke()
+        self.assertFalse(edit["window"].winfo_exists())
 
 
 # This lets you also run the file directly: .venv/bin/python test_tracker.py
