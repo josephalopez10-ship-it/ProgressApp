@@ -52,6 +52,17 @@ def refresh_tree():
         for device_name, device_status in door.devices.items():
             tree.insert(door_row, "end", text=device_name, values=(device_status,), tags=(device_status,))
 
+def get_selected_door():
+    selected = tree.selection()
+    if len(selected) == 0:
+        return None
+    row = selected[0]
+
+    if tree.parent(row) != "":
+        row = tree.parent(row)
+
+    return data.find_door(tree.item(row, "text"))
+
 
 # Open the "Add Door" window. Runs when the Add Door button is clicked.
 def open_add_door():
