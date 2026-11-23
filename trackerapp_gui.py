@@ -173,11 +173,11 @@ def open_edit_door():
     edit_window.title(f"Edit Door - {door.name}")
     edit_window.grab_set()
 
-    tk.Label(edit_window, tect="Door name:".grid(row=0, column=0, sticky="w", padx=10, pady=5))
+    tk.Label(edit_window, text="Door name:").grid(row=0, column=0, sticky="w", padx=10, pady=5)
     name_entry = tk.Entry(edit_window, width=25)
 
     name_entry.insert(0, door.name)
-    name_entry.grid(row=10, column=1, sticky="w", padx=10, pady=5)
+    name_entry.grid(row=0, column=1, sticky="w", padx=10, pady=5)
 
     device_listbox = tk.Listbox(edit_window, height=8)
     device_listbox.grid(row=1, column=0, columnspan=3, sticky="we", padx=10, pady=5)
@@ -189,6 +189,7 @@ def open_edit_door():
         device_names.clear()
         for device_name, device_status in door.devices.items():
             device_listbox.insert("end", f"{device_name}   {device_status}")
+            device_names.append(device_name)
 
     def get_selected_device():
 
