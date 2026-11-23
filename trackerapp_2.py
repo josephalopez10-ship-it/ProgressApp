@@ -23,7 +23,7 @@ def ask_status(prompt):
         value = input(f"{prompt}: \n").upper()
         if value in VALID_STATUSES or value == "Q":
             return value
-        print(Fore.RED+f"{value}is not a valid entry. Please enter C,P,R, or N (Q to quit)")
+        print(Fore.RED+f"|{value}| is not a valid entry. Please enter C,P,R, or N (Q to quit)")
 
 # functions that finds what color to display the device status when listed to the user.
 def status_color(value):
