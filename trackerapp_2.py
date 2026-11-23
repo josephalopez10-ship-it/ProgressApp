@@ -95,7 +95,6 @@ def save_doors():
     with FILE_PATH.open("w", encoding="utf-8") as file:
         for door in door_list:
             
-            # text line and add a newline so each door is stored on a separate line.
             file.write(door.to_single_line() + "\n")
 
 # Function to add a new door to the list. It prompts the user for door details then creates a new Door object and appends it to the door_list. The user can also view the current list of doors or quit the operation.
