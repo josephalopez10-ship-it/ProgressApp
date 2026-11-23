@@ -178,39 +178,30 @@ def add_door():
 
         # Ask for each device's status. ask_status() only accepts C, P, R, N or Q.
         # If the user types Q at any point, leave without saving this door.
-        new_door_status = ask_status("Status")
-        if new_door_status == "Q":
-            return
+        new_door = Door(new_door_name)
+        print("\nAdd the devices on thsi door. Press ENTER on a blank device name whne done.\n")
 
-        new_card_reader = ask_status("Card Reader")
-        if new_card_reader == "Q":
-            return
+        while True:
+            device_name = input("Device name: \n")
 
-        new_door_contact = ask_status("Door Contact")
-        if new_door_contact == "Q":
-            return
+            if device_name == "Q":
+                return
 
-        new_lock = ask_status("Lock")
-        if new_lock == "Q":
-            return
+            if device_name.strip() == "":
+                break
 
-        new_rex = ask_status("REX")
-        if new_rex == "Q":
-            return
+            if device_name in new_door.devices:
+                print(Fore.RED+f"{device_name} is already on this door.")
+                continue
 
-        new_door_restraint = ask_status("Restraint")
-        if new_door_restraint == "Q":
-            return
+            device_status = ask_status(f"{device_name} status")
+            if device_status == "Q":
+                return
 
-        else:
-            # Everything has been entered: build the Door and add it to the list.
-            new_door = Door(new_door_name, new_door_status, new_card_reader, new_door_contact, new_lock, new_rex, new_door_restraint)
-            door_list.append(new_door)
+            new_door.devices[device_name] = device_status
 
-            # Save right away so the new door is kept even if the app closes.
             save_doors()
-            print(Fore.GREEN+f"\n{new_door_name} successfully added to the list.\n")
-
+            print(Fore.GREEN+f"\n{new_door_name} usccessfully added to the list ({new_door.status()}).\n")
 
 # Remove doors. Asks for a door name, confirms with Y/N, then deletes it.
 # Keeps looping so several doors can be removed in a row.
