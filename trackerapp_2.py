@@ -13,7 +13,7 @@
 #
 # TODO: ADD DEVICES TO DOORS
 
-
+import json
 # Path is a built-in tool for working with file locations.
 from pathlib import Path
 # Door is the class from door.py that holds one door's information.
@@ -26,7 +26,7 @@ init(autoreset=True)
 
 # Where the save file lives. This always points to door_list.txt in the same
 # folder as this script, no matter which folder you run the app from.
-FILE_PATH = Path(__file__).resolve().with_name("door_list.txt")
+FILE_PATH = Path(__file__).resolve().with_name("door_list.json")
 
 # Every door is stored in this list while the app is running.
 # Each item in the list is a Door object (see door.py).
@@ -123,46 +123,34 @@ def find_door(name):
     return None
 
 
-# Read door_list.txt and put every saved door into door_list.
+# Read door_list.jsonand put every saved door into door_list.
 # This runs once, when the app starts.
 def load_doors():
-    # "try" lets us handle the error if the file doesn't exist yet.
-    try:
-        # Open the file for reading ("r"). "with" closes the file automatically when done.
-        with FILE_PATH.open("r", encoding="utf-8") as file:
-            # Each line in the file is one door.
-            for line in file:
-                # Skip empty lines.
-                if not line.strip():
-                    continue
+    #frist time running app no file for list exists so create one
+    if not FILE_PATH.exists():
+        return
 
-                # Make an empty Door, then fill it in from the line of text.
-                door = Door("", "", "", "", "", "", "")
-                try:
-                    door.from_single_line(line)
-                except ValueError as error:
-                    # The line was broken (wrong number of values). Skip just
-                    # this line and keep loading the rest of the file.
-                    print(f"Skipped invalid door entry: {error}")
-                    continue
+    with FILE_PATH.open("r", encoding="utf-8") as file:
+        #json.load reads file and give back list of dictionaries
 
-                door_list.append(door)
+        saved_doors = json.load(file)
 
-    except FileNotFoundError:
-        # First time running the app: there is no save file yet, so create an empty one.
-        FILE_PATH.touch()
+    for data in saved_doors:
+        door_list.append(Door.from_dict(data))
 
 
 # Save every door in door_list to door_list.txt, one door per line.
 # This is called after every add, remove, and edit, so nothing is lost if
 # the app closes.
 def save_doors():
-    # "w" (write) mode erases the old file and writes it fresh, so the file
-    # always matches door_list exactly.
+
+    #json cant save door object directly so turn them into dictionaries
+    data = []
+    for door in door_list:
+        data.append(door.to_dict())
+
     with FILE_PATH.open("w", encoding="utf-8") as file:
-        for door in door_list:
-            # "\n" starts a new line, so each door goes on its own line.
-            file.write(door.to_single_line() + "\n")
+        json.dump(data, file, indent=2)
 
 
 # Add new doors. Asks for a door name and then the status of each device.
