@@ -198,7 +198,11 @@ def open_edit_door():
     name_entry.grid(row=0, column=1, sticky="w", padx=10, pady=5)
 
     # --- Row 1: list of this door's devices ---
-    device_listbox = tk.Listbox(edit_window, height=8)
+    # exportselection=False keeps the clicked device selected while you pick
+    # a status from the dropdown. Without it, tkinter only allows one
+    # selection at a time, so picking from the dropdown would unselect the
+    # device and Set Status would say "Click a device in the list first."
+    device_listbox = tk.Listbox(edit_window, height=8, exportselection=False)
     device_listbox.grid(row=1, column=0, columnspan=3, sticky="we", padx=10, pady=5)
 
     # A listbox only knows row numbers (0, 1, 2...), not device names.

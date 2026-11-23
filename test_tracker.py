@@ -354,6 +354,9 @@ class TestGuiEditDoor(GuiTestBase):
     # Helper: click a device in the Edit window's device list.
     def click_device(self, edit, device_name):
         listbox = edit["devices"]
+        # Let the window finish appearing first. tkinter ignores click events
+        # sent to a window that isn't on screen yet.
+        edit["window"].update()
         for row_number in range(listbox.size()):
             if listbox.get(row_number).startswith(device_name + "   "):
                 listbox.selection_clear(0, "end")
@@ -401,6 +404,19 @@ class TestGuiEditDoor(GuiTestBase):
         # All devices are C now, so the door turns C.
         self.assertEqual(self.table_status("Joes Door"), "C")
         self.assertEqual(self.saved_file()[0]["devices"], {"Card Reader": "C", "Lock": "C", "REX": "C"})
+
+    def test_device_stays_selected_after_picking_from_dropdown(self):
+        edit = self.open_edit_window("Joes Door")
+        self.click_device(edit, "Lock")
+        # Picking from the real dropdown also highlights its text. That used to
+        # unselect the device in the list, so Set Status failed.
+        edit["status"].set("C")
+        edit["status"].selection_range(0, "end")
+        edit["window"].update()
+        edit["buttons"]["Set Status"].invoke()
+
+        self.assertEqual(self.errors, [])
+        self.assertEqual(data.door_list[0].devices["Lock"], "C")
 
     def test_set_status_with_no_device_selected(self):
         edit = self.open_edit_window("Joes Door")
