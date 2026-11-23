@@ -8,7 +8,7 @@
 #   R = Restrained (shown in red)
 #   N = N/a        (no color, the door doesn't have this device)
 #
-# All doors are saved in door_list.txt, so they are still there the next time
+# All doors are saved in door_list.json, so they are still there the next time
 # the app starts.
 #
 # TODO: ADD DEVICES TO DOORS
@@ -24,7 +24,7 @@ from colorama import Fore, Style, init
 # autoreset=True puts the color back to normal after every print().
 init(autoreset=True)
 
-# Where the save file lives. This always points to door_list.txt in the same
+# Where the save file lives. This always points to door_list.json in the same
 # folder as this script, no matter which folder you run the app from.
 FILE_PATH = Path(__file__).resolve().with_name("door_list.json")
 
@@ -123,10 +123,10 @@ def find_door(name):
     return None
 
 
-# Read door_list.jsonand put every saved door into door_list.
+# Read door_list.json and put every saved door into door_list.
 # This runs once, when the app starts.
 def load_doors():
-    #frist time running app no file for list exists so create one
+    # First time running the app: no save file yet, so start with an empty list.
     if not FILE_PATH.exists():
         return
 
@@ -139,7 +139,7 @@ def load_doors():
         door_list.append(Door.from_dict(data))
 
 
-# Save every door in door_list to door_list.txt, one door per line.
+# Save every door in door_list to door_list.json.
 # This is called after every add, remove, and edit, so nothing is lost if
 # the app closes.
 def save_doors():
@@ -238,7 +238,7 @@ def remove_door():
         choice = input().upper()
         if choice == "Y":
             door_list.remove(found_door)
-            # Save so the door is also gone from door_list.txt.
+            # Save so the door is also gone from door_list.json.
             save_doors()
             print(Fore.RED+f"\n{remove_door_name} has been DELETED from the list.\n")
         elif choice == "N":
@@ -337,6 +337,18 @@ def edit_door():
         save_doors()
         print(f"Data has been updated.\n")
 
+# print a door, its status and devices
+def show_door(door):
+    print(f"Door:         {door.name}")
+    print(f"Status:       {status_color(door.status())}")
+
+    if len(door.devices) == 0:
+        print(" (no devices yet)")
+    #.items() gives each device with its status
+    #:<14 jsu tmake sure all the statuses line up
+    for device_name, device_status in door.devices.items():
+        print(f"  {device_name:<14}{status_color(device_status)}")
+
 
 # Print every door and the status of each of its devices.
 # Statuses are colored by status_color(): green = C, yellow = P, red = R.
@@ -344,17 +356,9 @@ def list_doors():
     print("\nList of all doors:\n")
 
     for door in door_list:
-
-        print(f"---------------------------------------------------------------------------------------------------------------------------------------")  # Separator line between doors
-        print(f"Door:         {status_color(door.name)}")
-        print(f"Status:       {status_color(door.status)}")
-        print(f"Card Reader:  {status_color(door.card_reader)}")
-        print(f"Door Contact: {status_color(door.door_contact)}")
-        print(f"Lock:         {status_color(door.lock)}")
-        print(f"REX:          {status_color(door.rex)}")
-        print(f"Restraint:    {status_color(door.restraint)}")
-        print(f"---------------------------------------------------------------------------------------------------------------------------------------\n")  # Separator line between doors
-
+        print("-" * 60)
+        show_door(door)
+        print("-" * 60 + "\n")
 
 # This is where the app actually starts.
 # The code below only runs when you run this file directly

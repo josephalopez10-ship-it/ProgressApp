@@ -1,18 +1,17 @@
 # The Door class holds all the information about one door:
-# its name, its overall status, and the status of each device on it.
+# its name, and a dictionary of the devices on it with each device's status.
 #
-# It also converts a door to and from one line of text, which is how doors
-# are saved in door_list.txt. For example:
-#   Main Entrance, C, C, P, C, C, N
-#   (name, status, card reader, door contact, lock, REX, restraint)
+# Example:
+#   door.name    = "Main Entrance"
+#   door.devices = {"Card Reader": "C", "Lock": "P", "REX": "N"}
 class Door:
     # __init__ runs when a new Door is created, for example:
-    #   Door("Main Entrance", "C", "C", "P", "C", "C", "N")
-    # "self" means "this particular door".
+    #   Door("Main Entrance", {"Card Reader": "C", "Lock": "P"})
+    # devices is optional. If it isn't given, the door starts with no devices.
     def __init__(self, name, devices=None):
-        # Store the seven values on the door, so they can be used later as
-        # door.name, door.status, door.card_reader, and so on.
         self.name = name
+        # Use None as the default and create the dictionary here. Writing
+        # devices={} above would make every door share ONE dictionary.
         if devices is None:
             devices = {}
         self.devices = devices

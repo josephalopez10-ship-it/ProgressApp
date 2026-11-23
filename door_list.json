@@ -1,0 +1,6 @@
+[
+  {"name": "Main Entrance", "devices": {"Card Reader": "C", "Lock": "C", "REX": "N"}},
+  {"name": "Server Room", "devices": {"Card Reader": "C", "Lock": "P"}},
+  {"name": "Loading Dock", "devices": {"Card Reader": "P", "Restraint": "R"}},
+  {"name": "Roof Hatch", "devices": {}}
+]
