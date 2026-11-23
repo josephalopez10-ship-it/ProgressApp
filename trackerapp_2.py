@@ -247,8 +247,8 @@ def remove_door():
             continue
 
 
-# Edit one thing about a door: its name or one device's status.
-# Shows the door's current info, asks what to change, then saves the change.
+# Edit a door: rename it, change a device's status, add a device, or delete one.
+# Shows the door first, then asks what to change, then saves the change.
 # Q at the door name = go back to the main menu.
 # Q at any later question = cancel and start over with a new door name.
 def edit_door():
@@ -265,83 +265,91 @@ def edit_door():
             print(f"Not in list please try again")
             continue
 
-        # Show everything about the door so the user can see it before changing it.
-        print(f"You chose to edit: {door_to_edit}")
-        print(f"Name:         {status_color(found_door.name)}")
-        print(f"Status:       {status_color(found_door.status)}")
-        print(f"Card Reader:  {status_color(found_door.card_reader)}")
-        print(f"Door Contact: {status_color(found_door.door_contact)}")
-        print(f"Lock:         {status_color(found_door.lock)}")
-        print(f"REX:          {status_color(found_door.rex)}")
-        print(f"Restraint:    {status_color(found_door.restraint)}")
+        # Show the door so the user can see it before changing it.
+        print(f"You chose to edit: {found_door.name}\n")
+        show_door(found_door)
 
-        # Menu of what can be edited.
-        print("####################################################")
-        print(f"N - Door name, S - Status, C - Card Reader")
-        print(f"D - Door Contact, L - Lock, E - REX, R - Restraint")
+        # Menu of what can be changed.
+        print("\n####################################################")
+        print("N - Rename door,  S - Change a device status")
+        print("A - Add a device, D - Delete a device,  Q - Back")
         print("####################################################\n")
-        print()
-        choice = input(f"What would you like to edit?\n")
-
-
-        # A dictionary that matches each menu letter to two things:
-        #   1. the attribute name on the Door object (for example "lock" means door.lock)
-        #   2. a readable label to show the user
-        options_to_edit = {
-            "N": ("name", "Door name"),
-            "S": ("status", "Status"),
-            "C": ("card_reader", "Card Reader"),
-            "D": ("door_contact", "Door Contact"),
-            "L": ("lock", "Lock"),
-            "E": ("rex", "REX"),
-            "R": ("restraint", "Restraint"),
-        }
+        choice = input("What would you like to do?\n").upper()
 
         if choice == "Q":
             continue
-        elif choice not in options_to_edit:
-            print(f"Invalid option try again. OPTIONS ARE CASE-SENSIITVE.")
-            continue
 
-        # Unpack the two values for the chosen letter.
-        # Example: choice "L" gives attribute = "lock" and label = "Lock".
-        attribute, label = options_to_edit[choice]
-        print(f"\nEditing door: {found_door.name}, {label}:\n")
+        # N: rename the door
+        elif choice == "N":
+            new_name = input("Enter the new door name:\n")
+            if new_name == "Q":
+                continue
+            if not is_valid_name(new_name):
+                continue
+            if find_door(new_name) is not None:
+                print(f"\n{new_name} already exists in the list. Please choose another name.\n")
+                continue
+            found_door.name = new_name
 
-        # 1. Get the new value. A name can be any text, but a status must be
-        #    C, P, R or N, so statuses go through ask_status().
-        if choice == "N":
-            new_label = input("Enter the door name.\n")
+        # S: change the status of a device that's already on the door
+        elif choice == "S":
+            device_name = input("Which device?\n")
+            if device_name == "Q":
+                continue
+            # "not in" checks whether this name is a key in the devices dictionary.
+            if device_name not in found_door.devices:
+                print(Fore.RED + f"{device_name} is not on this door.")
+                continue
+            new_status = ask_status(f"{device_name} status")
+            if new_status == "Q":
+                continue
+            found_door.devices[device_name] = new_status
+
+        # A: add a new device to the door
+        elif choice == "A":
+            device_name = input("New device name:\n")
+            if device_name == "Q" or device_name.strip() == "":
+                continue
+            if device_name in found_door.devices:
+                print(Fore.RED + f"{device_name} is already on this door.")
+                continue
+            new_status = ask_status(f"{device_name} status")
+            if new_status == "Q":
+                continue
+            found_door.devices[device_name] = new_status
+
+        # D: delete a device from the door
+        elif choice == "D":
+            device_name = input("Which device do you want to delete?\n")
+            if device_name == "Q":
+                continue
+            if device_name not in found_door.devices:
+                print(Fore.RED + f"{device_name} is not on this door.")
+                continue
+            # del removes this device name and its status from the dictionary.
+            del found_door.devices[device_name]
+
         else:
-            new_label = ask_status("Enter updated status")
-
-        # 2. Q means cancel: start over without changing anything.
-        if new_label == "Q":
+            print("Invalid option, please try again.")
             continue
 
-        # 3. For a new name, make sure it's valid and not already used by another door.
-        if choice == "N" and not is_valid_name(new_label):
-            continue
-        if choice == "N" and find_door(new_label) is not None:
-            print(f"\n{new_label} already exists in the list. Please choose another name.\n")
-            continue
-
-        # 4. Save the change.
-        # setattr(found_door, "lock", "C") does the same thing as found_door.lock = "C".
-        # We use setattr because the attribute name is stored in a variable.
-        setattr(found_door, attribute, new_label)
+        # We only get here if one of the changes above was made,
+        # because every "cancel" path above uses continue.
         save_doors()
-        print(f"Data has been updated.\n")
+        print(Fore.GREEN + f"\nData has been updated. {found_door.name} is now {found_door.status()}.\n")
 
-# print a door, its status and devices
+
+# Print one door: its name, overall status, and every device with its status.
+# Used by list_doors() and edit_door().
 def show_door(door):
     print(f"Door:         {door.name}")
     print(f"Status:       {status_color(door.status())}")
 
     if len(door.devices) == 0:
-        print(" (no devices yet)")
-    #.items() gives each device with its status
-    #:<14 jsu tmake sure all the statuses line up
+        print("  (no devices yet)")
+
+    # .items() gives each device name together with its status.
+    # :<14 pads the name to 14 characters so all the statuses line up.
     for device_name, device_status in door.devices.items():
         print(f"  {device_name:<14}{status_color(device_status)}")
 
