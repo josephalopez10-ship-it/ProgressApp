@@ -106,9 +106,6 @@ def is_valid_name(name):
     if name.strip() == "":
         print(Fore.RED+"Door name cannot be blank.")
         return False
-    if "," in name:
-        print(Fore.RED+"Door name cannot contain a comma. Use a dash intead, example: 'Building A - Door 101'.")
-        return False
     return True
 
 
