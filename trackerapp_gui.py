@@ -27,7 +27,7 @@ def refresh_tree():
 
 data.load_doors()
 
-window = tk.TK()
+window = tk.Tk()
 window.title("TrackerApp")
 window.geometry("500x600")
 
