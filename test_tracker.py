@@ -526,6 +526,10 @@ class TestGuiEditDoor(GuiTestBase):
         self.assertEqual(self.open_window_titles(), ["Edit Door - Joes Door"])
         # The door's device list must NOT collapse (that's what return "break" stops).
         self.assertTrue(self.gui["tree"].item(door_row, "open"))
+        # The Edit window must be tied to the main window, so the desktop keeps
+        # it in front instead of hiding it behind the main window.
+        edit_window = self.newest_window()
+        self.assertEqual(str(edit_window.transient()), str(self.gui["window"]))
 
     def test_double_click_device_opens_its_door(self):
         tree = self.gui["tree"]

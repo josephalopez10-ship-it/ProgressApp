@@ -94,6 +94,9 @@ def open_add_door():
     # Toplevel = a second window that opens on top of the main one.
     add_window = tk.Toplevel(window)
     add_window.title("Add door")
+    # transient(window) tells the desktop this window belongs to the main
+    # window, so it always stays in front of it and never gets hidden behind.
+    add_window.transient(window)
     # grab_set() stops clicks on the main window until this one is closed.
     add_window.grab_set()
 
@@ -201,6 +204,10 @@ def open_edit_door():
 
     edit_window = tk.Toplevel(window)
     edit_window.title(f"Edit Door - {door.name}")
+    # Keep this window in front of the main window. Without this, a
+    # double-click could open it and then the desktop would bring the main
+    # window back to the front, hiding this one behind it.
+    edit_window.transient(window)
     # Stop clicks on the main window until this one is closed.
     edit_window.grab_set()
 
