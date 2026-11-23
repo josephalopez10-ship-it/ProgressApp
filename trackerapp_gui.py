@@ -342,6 +342,16 @@ def open_edit_door():
     # Fill the device list when the window first opens.
     refresh_devices()
 
+def remove_selected_door():
+    door = get_selected_door()
+    if door is None:
+        messagebox.showerror("No door selected", "Click a door in the list first")
+        return
+
+    if messagebox.askyesno("Remove door", f"Delete {door.name} and all its devices?\nThis can't be undone.", icon="warning"):
+        data.door_list.remove(door)
+        data.save_doors()
+        refresh_tree()
 
 ##########################################################################
 # Build the main window. Everything below runs once, when the app starts.
@@ -367,6 +377,7 @@ tk.Button(button_frame, text="Add Door", command=open_add_door).pack(side="left"
 # padx=(10, 0) puts 10 pixels of space on the left of the button, none on the right.
 tk.Button(button_frame, text="Edit Door", command=open_edit_door).pack(side="left", padx=(10, 0))
 
+tk.Button(button_frame, text="Remove Door", command=remove_selected_door).pack(side="right")
 # A Treeview is a table where rows can have rows inside them, like folders.
 # Column "#0" is the built-in first column (door or device name).
 # columns=("status",) adds one more column, called "status".
