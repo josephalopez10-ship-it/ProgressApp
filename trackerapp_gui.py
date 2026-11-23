@@ -32,8 +32,7 @@ STATUS_COLORS = {
 
 
 # Clear the table and fill it again from door_list.
-# Call this whenever a door is added, edited, or removed, so the table
-# always matches the saved data.
+# Call this whenever a door is added, edited, or removed, so the table always matches the saved data.
 def refresh_tree():
     # Remove every row currently in the table.
     for row in tree.get_children():
@@ -71,8 +70,10 @@ def open_add_door():
     # sticky="w" lines the widget up on the left (w = west).
     # padx / pady add empty space around the widget, in pixels.
     tk.Label(add_window, text="Door name:").grid(row=0, column=0, sticky="w", padx=10, pady=5)
+
     # An Entry is a one-line box the user can type in.
     name_entry = tk.Entry(add_window, width=30)
+
     # columnspan=2 lets the name box stretch across columns 1 and 2.
     name_entry.grid(row=0, column=1, columnspan=2, sticky="w", padx=10, pady=5)
 
@@ -80,9 +81,11 @@ def open_add_door():
     tk.Label(add_window, text="Device:").grid(row=1, column=0, sticky="w", padx=10)
     device_entry = tk.Entry(add_window, width=20)
     device_entry.grid(row=1, column=1, sticky="w", padx=10)
+
     # A Combobox is a dropdown. state="readonly" means you can only pick
     # from the list (C, P, R, N), not type something else.
     status_box = ttk.Combobox(add_window, values=data.VALID_STATUSES, width=4, state="readonly")
+
     # Start the dropdown on P, since most devices start out pending.
     status_box.set("P")
     status_box.grid(row=1, column=2, padx=10)
@@ -149,9 +152,11 @@ def open_add_door():
     tk.Button(add_window, text="Cancel", command=add_window.destroy).grid(row=4, column=2, pady=10)
 
 
-# ---------------------------------------------------------------------------
+
 # Build the main window. Everything below runs once, when the app starts.
-# ---------------------------------------------------------------------------
+##########################################################################
+##########################################################################
+
 
 # Load the saved doors before building the window.
 data.load_doors()
