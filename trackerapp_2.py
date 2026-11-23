@@ -17,6 +17,52 @@ FILE_PATH = Path(__file__).resolve().with_name("door_list.txt")
 # The file on disk is used to preserve those records after the program closes.
 door_list = []
 
+# functions that finds what color to display the device status when listed to the user.
+def status_color(value):
+        colors = {
+                "C": Fore.GREEN,
+                "P": Fore.YELLOW,
+                "R": Fore.RED,
+            }
+        color = colors.get(value)
+        if color is None:
+            return value
+        return f"{color}{value}{Style.RESET_ALL}"
+
+#functions that handles checking if the door that the user has inputed is in the door list.
+def find_door(name):
+    for door in door_list:
+        if door[1] == name:
+            return door
+    return None
+
+# Basic menu function to display options to the user and call the appropriate functions based on user input
+def menu():
+    print("                     ************************************************")
+    print("                     ********Welcome to the Door Tracker App!********")
+    print("                     ************************************************")
+    print(f"\n")
+    print(" A - Add a door/doors, R - Remove a door/doors, E - Edit a door, L - List all doors, Q - Quit")
+
+    choice = input(f"\n")
+    # the users choice is not CASE-SENSITIVE in the menu, but it is CASE-SENSITIVE in the add_door() and remove_door() functions.
+    if choice == "A" or choice == "a":
+        add_door()
+    elif choice == "R" or choice == "r":
+        remove_door()
+    elif choice == "L" or choice == "l":
+        list_doors()
+    elif choice == "E" or choice == "e":
+        edit_door()
+    elif choice == "Q" or choice == "q":
+        print(f"                                Thank you for using Tracker.")
+        global quit
+        quit = False
+    else:
+        print("Invalid choice. Please try again.")
+        return True
+
+
 # Read door_list.txt and rebuild the in-memory door_list at startup.
 def load_doors():
     try:
@@ -62,46 +108,22 @@ def save_doors():
             # text line and add a newline so each door is stored on a separate line.
             file.write(door[0].to_single_line() + "\n")
 
-
-# Basic menu function to display options to the user and call the appropriate functions based on user input
-def menu():
-    print("                     ************************************************")
-    print("                     ********Welcome to the Door Tracker App!********")
-    print("                     ************************************************")
-    print(f"\n")
-    print(" A - Add a door/doors, R - Remove a door/doors, E - Edit a door, L - List all doors, Q - Quit")
-
-    choice = input(f"\n")
-    # the users choice is not CASE-SENSITIVE in the menu, but it is CASE-SENSITIVE in the add_door() and remove_door() functions.
-    if choice == "A" or choice == "a":
-        add_door()
-    elif choice == "R" or choice == "r":
-        remove_door()
-    elif choice == "L" or choice == "l":
-        list_doors()
-    elif choice == "E" or choice == "e":
-        edit_door()
-    elif choice == "Q" or choice == "q":
-        print(f"                                Thank you for using Tracker.")
-        global quit
-        quit = False
-    else:
-        print("Invalid choice. Please try again.")
-        return True
-
-
 # Function to add a new door to the list. It prompts the user for door details then creates a new Door object and appends it to the door_list. The user can also view the current list of doors or quit the operation.
 def add_door():
     while True:
         print(f"Please enter the door name and the status of each device: C - Complete, P - Pending, R - Restrained, N - N/a")
         print()
         new_door_name = input(f"Door Name: \n")
-        if new_door_name == "Q":
+
+        if find_door(new_door_name) is not None:
+            print(f"{new_door_name} already exist please change the entry.")
+            continue
+        elif new_door_name == "Q":
             return
         
         # Entering uppercase L here calls the list screen and continue restarts this
         # while loop. That allows the user to choose "L" again or enter another door.
-        if new_door_name == "L":
+        elif new_door_name == "L":
             list_doors()
             continue
 
@@ -145,54 +167,39 @@ def remove_door():
         remove_door_name = input("Door Name: ")
         print()
 
-        for door in door_list:
-            if remove_door_name != door[1] and remove_door_name.upper() != "Q" and remove_door_name.upper() != "L":
-                print(f"{remove_door_name} is not in the door list.")
-                print()
-                continue
-            elif remove_door_name.upper() == "Q" and remove_door_name != door[1]:
-                return
-            elif remove_door_name.upper() == "L" and remove_door_name != door[1]:
-                        list_doors()
-                        continue
+        found_door = find_door(remove_door_name)
+        if found_door is None:
+            print(f"{remove_door_name} is not on the list.\n")
+            continue
        
             # Entering uppercase L displays the current list without ending or restarting
             # the remove workflow; continue then prompts for another door name.
-            else:
-                print(Fore.RED+f"Are you sure you want to DELETE: "+f"{remove_door_name} [Y/N]")
-                choice = input().upper()
-                if choice == "Y":
-                    for door in door_list:
-                        if door[1] == remove_door_name:
-                            door_list.remove(door)
-                            # Save after removal so door_list.txt no longer contains the deleted door.
-                            save_doors()
-                            print(Fore.RED+f"\n{remove_door_name} has been DELETED from the list.\n")
-                            print()
-                            continue  # Continue the while loop to allow removing more doors or quitting.
-                        else:
-                            print(f"{remove_door_name} is not in the door list.")
-                            print()
-                            continue
-                elif choice == "N":
+            
+        print(Fore.RED+f"Are you sure you want to DELETE: "+f"{remove_door_name} [Y/N]")
+        choice = input().upper()
+        if choice == "Y":
+            for door in door_list:
+                if door[1] == remove_door_name:
+                    door_list.remove(door)
+                    # Save after removal so door_list.txt no longer contains the deleted door.
+                    save_doors()
+                    print(Fore.RED+f"\n{remove_door_name} has been DELETED from the list.\n")
+                    print()
+                    continue  # Continue the while loop to allow removing more doors or quitting.
+                        
+                else:
+                    print(f"{remove_door_name} is not in the door list.")
                     print()
                     continue
-                else:
-                    print("Invalid option please try again.")
-                    print()
-                    continue   
 
-
-def status_color(value):
-        colors = {
-                "C": Fore.GREEN,
-                "P": Fore.YELLOW,
-                "R": Fore.RED,
-            }
-        color = colors.get(value)
-        if color is None:
-            return value
-        return f"{color}{value}{Style.RESET_ALL}"
+        elif choice == "N":
+            print()
+            continue
+            
+        else:
+            print("Invalid option please try again.")
+            print()
+            continue   
 
 # Function to edit a doors attributes.
 def edit_door():
@@ -207,10 +214,7 @@ def edit_door():
         found_door = None
     
         # check to see if user input is in the current list of doors
-        for door in door_list:
-            if door[1] == door_to_edit:
-                found_door = door
-                break
+        find_door(door_to_edit)
 
         if found_door is None:
             print(f"Not in list please try again")
@@ -265,7 +269,6 @@ def edit_door():
         save_doors()
         print(f"Data has been updated.\n")
         
-
 # Function to list all doors in the list. It prints each door name on a new line.
 def list_doors():
     print("\nList of all doors:\n")
