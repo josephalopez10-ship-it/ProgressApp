@@ -99,8 +99,6 @@ def menu():
 
 # Check that a door name is safe to save.
 # Returns True if the name is OK. Otherwise it prints the reason and returns False.
-# Commas are not allowed because the save file uses commas to separate the
-# values. A comma in a name would break that door's line in the file.
 def is_valid_name(name):
     # .strip() removes spaces, so a name of only spaces also counts as blank.
     if name.strip() == "":
@@ -150,9 +148,9 @@ def save_doors():
         json.dump(data, file, indent=2)
 
 
-# Add new doors. Asks for a door name and then the status of each device.
+# Add new doors. Asks for a door name, then each device on it and its status.
 # Keeps looping so several doors can be added in a row.
-# Q = go back to the main menu, L = show the door list.
+# Q = go back to the main menu (the current door is not saved), L = show the door list.
 def add_door():
     while True:
         print(f"Please enter the door name and the status of each device: C - Complete, P - Pending, R - Restrained, N - N/a")
@@ -173,32 +171,42 @@ def add_door():
             print(f"{new_door_name} already exist please change the entry.")
             continue
 
-        # Ask for each device's status. ask_status() only accepts C, P, R, N or Q.
-        # If the user types Q at any point, leave without saving this door.
+        # Start the door with no devices, then add them one at a time.
         new_door = Door(new_door_name)
-        print("\nAdd the devices on thsi door. Press ENTER on a blank device name whne done.\n")
+        print("\nAdd the devices on this door. Press ENTER on a blank device name when done.\n")
 
         while True:
             device_name = input("Device name: \n")
 
+            # Q = cancel this door without saving it.
             if device_name == "Q":
                 return
 
+            # A blank name means the user is finished adding devices.
+            # break leaves this inner loop only, not the outer one.
             if device_name.strip() == "":
                 break
 
+            # Each device name can only be used once per door,
+            # because it's the key in the devices dictionary.
             if device_name in new_door.devices:
                 print(Fore.RED+f"{device_name} is already on this door.")
                 continue
 
+            # ask_status() only accepts C, P, R, N or Q.
             device_status = ask_status(f"{device_name} status")
             if device_status == "Q":
                 return
 
             new_door.devices[device_name] = device_status
 
-            save_doors()
-            print(Fore.GREEN+f"\n{new_door_name} usccessfully added to the list ({new_door.status()}).\n")
+        # The inner loop is finished (blank device name), so the door is complete.
+        # These lines are lined up with "while True:" above, so they run once,
+        # after all the devices are entered, not after every device.
+        door_list.append(new_door)
+        # Save right away so the new door is kept even if the app closes.
+        save_doors()
+        print(Fore.GREEN+f"\n{new_door_name} successfully added to the list ({new_door.status()}).\n")
 
 # Remove doors. Asks for a door name, confirms with Y/N, then deletes it.
 # Keeps looping so several doors can be removed in a row.
@@ -342,6 +350,11 @@ def show_door(door):
 # Statuses are colored by status_color(): green = C, yellow = P, red = R.
 def list_doors():
     print("\nList of all doors:\n")
+
+    # Nothing to show yet, so say so and leave the function.
+    if len(door_list) == 0:
+        print("No doors have been added yet.\n")
+        return
 
     for door in door_list:
         print("-" * 60)
