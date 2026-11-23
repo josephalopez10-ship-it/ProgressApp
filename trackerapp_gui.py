@@ -97,6 +97,9 @@ def open_add_door():
     # transient(window) tells the desktop this window belongs to the main
     # window, so it always stays in front of it and never gets hidden behind.
     add_window.transient(window)
+    # Wait until the window is actually on screen. grab_set() below fails
+    # with "grab failed: window not viewable" if it runs too early.
+    add_window.wait_visibility()
     # grab_set() stops clicks on the main window until this one is closed.
     add_window.grab_set()
 
@@ -208,6 +211,12 @@ def open_edit_door():
     # double-click could open it and then the desktop would bring the main
     # window back to the front, hiding this one behind it.
     edit_window.transient(window)
+    # Wait until the window is actually on screen before grab_set().
+    # A double-click opens this window while the mouse is still busy with the
+    # second click, so the window appears a moment later than usual. Without
+    # this wait, grab_set() fails with "grab failed: window not viewable" and
+    # the rest of this function never runs.
+    edit_window.wait_visibility()
     # Stop clicks on the main window until this one is closed.
     edit_window.grab_set()
 
