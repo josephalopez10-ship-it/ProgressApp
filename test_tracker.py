@@ -611,6 +611,51 @@ class TestGuiRemoveDoor(GuiTestBase):
         self.assertEqual(self.table_names(), ["Joes Door"])
 
 
+# ---------------------------------------------------------------------------
+# The progress summary at the top of the window
+# ---------------------------------------------------------------------------
+class TestGuiSummary(GuiTestBase):
+
+    SAVED_DOORS = [
+        {"name": "Done Door", "devices": {"Lock": "C", "REX": "N"}},      # C
+        {"name": "Busy Door", "devices": {"Lock": "C", "REX": "P"}},      # P
+        {"name": "Stuck Door", "devices": {"Lock": "P", "Sounder": "R"}},  # R
+        {"name": "Empty Door", "devices": {}},                            # P
+    ]
+
+    # Helper: the summary's text.
+    def summary(self):
+        return self.gui["summary_label"].cget("text")
+
+    def test_counts_doors_and_devices(self):
+        # 5 devices that aren't N, and 2 of them are C: 2 / 5 = 40%.
+        self.assertEqual(self.summary(),
+                         "4 doors: 1 complete, 2 pending, 1 restrained\n"
+                         "Devices: 2 of 5 complete (40%)")
+
+    def test_updates_after_a_change(self):
+        # Change Busy Door's REX from P to C, then redraw like the app does.
+        data.door_list[1].devices["REX"] = "C"
+        self.gui["refresh_tree"]()
+        self.assertEqual(self.summary(),
+                         "4 doors: 2 complete, 1 pending, 1 restrained\n"
+                         "Devices: 3 of 5 complete (60%)")
+
+    def test_updates_after_remove(self):
+        tree = self.gui["tree"]
+        tree.selection_set(tree.get_children()[2])   # Stuck Door
+        self.gui["remove_selected_door"]()
+        self.assertTrue(self.summary().startswith("3 doors: 1 complete, 2 pending, 0 restrained"))
+
+    def test_no_doors_does_not_crash(self):
+        # With no devices at all, the percent must not divide by zero.
+        data.door_list.clear()
+        self.gui["refresh_tree"]()
+        self.assertEqual(self.summary(),
+                         "0 doors: 0 complete, 0 pending, 0 restrained\n"
+                         "Devices: 0 of 0 complete (0%)")
+
+
 # This lets you also run the file directly: .venv/bin/python test_tracker.py
 if __name__ == "__main__":
     unittest.main()

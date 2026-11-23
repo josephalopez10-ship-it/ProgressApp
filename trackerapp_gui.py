@@ -52,6 +52,48 @@ def refresh_tree():
         for device_name, device_status in door.devices.items():
             tree.insert(door_row, "end", text=device_name, values=(device_status,), tags=(device_status,))
 
+    # Update the totals at the top to match the table.
+    refresh_summary()
+
+
+# Count the doors and devices, and show the totals in the summary at the top.
+# Called at the end of refresh_tree(), so it updates automatically whenever
+# a door is added, edited, or removed.
+def refresh_summary():
+    # How many doors have each overall status. door.status() only ever gives
+    # back C, P, or R, so those are the only keys needed.
+    counts = {"C": 0, "P": 0, "R": 0}
+    for door in data.door_list:
+        # += 1 adds one to the count for this door's status.
+        counts[door.status()] += 1
+
+    # Count devices across every door. N devices are skipped (continue jumps to
+    # the next device), the same way they're ignored for the door status.
+    devices_total = 0
+    devices_done = 0
+    for door in data.door_list:
+        for device_status in door.devices.values():
+            if device_status == "N":
+                continue
+            devices_total += 1
+            if device_status == "C":
+                devices_done += 1
+
+    # Work out the percent complete. Dividing by 0 crashes Python, so check
+    # for "no devices yet" first. round() turns 77.8 into 78.
+    if devices_total == 0:
+        percent = 0
+    else:
+        percent = round(devices_done / devices_total * 100)
+
+    # .config() changes a widget after it was created; here, the label's text.
+    # "\n" puts the device totals on a second line.
+    # Two f-strings next to each other inside the brackets are joined into one,
+    # which is how a long line of text is split over several lines of code.
+    summary_label.config(text=f"{len(data.door_list)} doors: {counts['C']} complete, "
+                              f"{counts['P']} pending, {counts['R']} restrained\n"
+                              f"Devices: {devices_done} of {devices_total} complete ({percent}%)")
+
 
 # Find the door that's selected (clicked) in the table.
 # If a device row is selected, use the door it belongs to.
@@ -442,6 +484,14 @@ tk.Button(button_frame, text="Edit Door", command=open_edit_door).pack(side="lef
 # side="right" puts Remove Door on the far right, away from Add and Edit,
 # so it's harder to click by accident.
 tk.Button(button_frame, text="Remove Door", command=remove_selected_door).pack(side="right")
+
+# The progress summary along the top of the window.
+# font=(name, size, "bold") makes it bigger and bold so it stands out.
+# justify="left" lines up both lines of text on the left.
+# It must be packed BEFORE the table below, or it would end up under it.
+summary_label = tk.Label(window, text="", font=("TkDefaultFont", 11, "bold"), justify="left")
+# anchor="w" keeps the label on the left side of the window.
+summary_label.pack(side="top", anchor="w", padx=10, pady=(10, 0))
 
 # A Treeview is a table where rows can have rows inside them, like folders.
 # Column "#0" is the built-in first column (door or device name).
