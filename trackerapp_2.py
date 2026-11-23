@@ -63,6 +63,14 @@ def menu():
         print("Invalid choice. Please try again.")
         return True
 
+def is_valid_name(name):
+    if name.strip() == "":
+        print(Fore.RED+"Door name cannot be blank.")
+        return False
+    if "," in name:
+        print(Fore.RED+"Door name cannot contain a comma. Use a dash intead, example: 'Building A - Door 101'.")
+        return False
+    return True
 #functions that handles checking if the door that the user has inputed is in the door list.
 def find_door(name):
     for door in door_list:
@@ -114,11 +122,10 @@ def add_door():
 
         if new_door_name == "Q":
             return
-                
-        # Entering uppercase L here calls the list screen and continue restarts this
-        # while loop. That allows the user to choose "L" again or enter another door.
         elif new_door_name == "L":
             list_doors()
+            continue
+        elif not is_valid_name(new_door_name):
             continue
         elif find_door(new_door_name) is not None:
             print(f"{new_door_name} already exist please change the entry.")
@@ -237,12 +244,20 @@ def edit_door():
 
         if choice == "Q":
             continue
-        
+
+        if choice == "N" and not is_valid_name(new_label):
+            continue
+
         elif choice not in options_to_edit:
             print(f"Invalid option try again. OPTIONS ARE CASE-SENSIITVE.")
             continue
-    
-        # print the door and antribute of the door that is being edited
+
+        # check if the new name chosen by the user is int he list
+        if choice == "N" and find_door(new_label) is not None:
+            print(f"\n{new_label} already exists in the list. Please choose another name.\n")
+            continue
+
+     # print the door and antribute of the door that is being edited
         attribute, label = options_to_edit[choice]
         print(f"\nEditing door: {found_door.name}, {label}:\n")
 
@@ -253,12 +268,7 @@ def edit_door():
 
         if new_label == "Q":
             continue
-
-        # check if the new name chosen by the user is int he list
-        if choice == "N" and find_door(new_label) is not None:
-            print(f"\n{new_label} already exists in the list. Please choose another name.\n")
-            continue
-
+    
         setattr(found_door, attribute, new_label)
         save_doors()
         print(f"Data has been updated.\n")
