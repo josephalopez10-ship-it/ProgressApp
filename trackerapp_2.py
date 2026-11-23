@@ -1,23 +1,45 @@
-#ADD DEVICES TO DOORS
+# DOOR TRACKER APP
+# Tracks the install progress of each door and the devices on it
+# (card reader, door contact, lock, REX, restraint).
+#
+# Status codes used for every device:
+#   C = Complete   (shown in green)
+#   P = Pending    (shown in yellow)
+#   R = Restrained (shown in red)
+#   N = N/a        (no color, the door doesn't have this device)
+#
+# All doors are saved in door_list.txt, so they are still there the next time
+# the app starts.
+#
+# TODO: ADD DEVICES TO DOORS
 
 
-# Path provides a safe, platform-independent way to work with file and folder names.
+# Path is a built-in tool for working with file locations.
 from pathlib import Path
+# Door is the class from door.py that holds one door's information.
 from door import Door
+# colorama lets us print colored text in the terminal.
+# Fore = text colors, Style.RESET_ALL = go back to normal color.
 from colorama import Fore, Style, init
+# autoreset=True puts the color back to normal after every print().
 init(autoreset=True)
 
-# __file__ is the location of this Python script. resolve() converts it to an absolute
-# path, and with_name() replaces the script's filename with door_list.txt. This means
-# the app looks for the file next to trackerapp_2.py regardless of the current folder
-# from which the script is started.
+# Where the save file lives. This always points to door_list.txt in the same
+# folder as this script, no matter which folder you run the app from.
 FILE_PATH = Path(__file__).resolve().with_name("door_list.txt")
 
-# This in-memory list contains all Door records while the application is running.
-# The file on disk is used to preserve those records after the program closes.
+# Every door is stored in this list while the app is running.
+# Each item in the list is a Door object (see door.py).
 door_list = []
+
+# The only status letters a device is allowed to have.
 VALID_STATUSES = ["C", "P", "R", "N"]
 
+
+# Ask the user for a device status, and keep asking until they type a valid one.
+# prompt = the text shown to the user, for example "Card Reader".
+# Returns "C", "P", "R", "N", or "Q" (if the user wants to quit).
+# Lowercase is accepted, because .upper() turns "c" into "C".
 def ask_status(prompt):
     while True:
         value = input(f"{prompt}: \n").upper()
@@ -25,19 +47,29 @@ def ask_status(prompt):
             return value
         print(Fore.RED+f"|{value}| is not a valid entry. Please enter C,P,R, or N (Q to quit)")
 
-# functions that finds what color to display the device status when listed to the user.
+
+# Return a status letter with its color added, ready to print.
+# Example: status_color("C") gives a green "C".
+# Anything not in the colors dictionary (like "N" or a door name) is returned
+# unchanged, so it prints in the normal color.
 def status_color(value):
+        # A dictionary that matches each status letter to its color.
         colors = {
                 "C": Fore.GREEN,
                 "P": Fore.YELLOW,
                 "R": Fore.RED,
             }
+        # .get() returns None instead of crashing if the letter isn't in the dictionary.
         color = colors.get(value)
         if color is None:
             return value
+        # Color code + the letter + reset code, so only this letter is colored.
         return f"{color}{value}{Style.RESET_ALL}"
 
-# Basic menu function to display options to the user and call the appropriate functions based on user input
+
+# Show the main menu, read the user's choice, and run the matching function.
+# Menu letters work in upper or lowercase here. Inside the add, remove and
+# edit screens, Q and L must be typed in uppercase.
 def menu():
     print("                     ************************************************")
     print("                     ********Welcome to the Door Tracker App!********")
@@ -46,7 +78,6 @@ def menu():
     print(" A - Add a door/doors, R - Remove a door/doors, E - Edit a door, L - List all doors, Q - Quit")
 
     choice = input(f"\n")
-    # the users choice is not CASE-SENSITIVE in the menu, but it is CASE-SENSITIVE in the add_door() and remove_door() functions.
     if choice == "A" or choice == "a":
         add_door()
     elif choice == "R" or choice == "r":
@@ -57,13 +88,21 @@ def menu():
         edit_door()
     elif choice == "Q" or choice == "q":
         print(f"                                Thank you for using Tracker.")
+        # "global" lets this function change the quit variable created at the
+        # bottom of the file. Setting it to False stops the main loop.
         global quit
         quit = False
     else:
         print("Invalid choice. Please try again.")
         return True
 
+
+# Check that a door name is safe to save.
+# Returns True if the name is OK. Otherwise it prints the reason and returns False.
+# Commas are not allowed because the save file uses commas to separate the
+# values. A comma in a name would break that door's line in the file.
 def is_valid_name(name):
+    # .strip() removes spaces, so a name of only spaces also counts as blank.
     if name.strip() == "":
         print(Fore.RED+"Door name cannot be blank.")
         return False
@@ -71,99 +110,123 @@ def is_valid_name(name):
         print(Fore.RED+"Door name cannot contain a comma. Use a dash intead, example: 'Building A - Door 101'.")
         return False
     return True
-#functions that handles checking if the door that the user has inputed is in the door list.
+
+
+# Look through door_list for a door with this exact name.
+# Returns that Door object if found, or None if no door has that name.
+# Used by add (to stop duplicates), remove, and edit.
 def find_door(name):
     for door in door_list:
         if door.name == name:
+            # return stops the loop right away, as soon as the door is found.
             return door
     return None
 
-# Read door_list.txt and rebuild the in-memory door_list at startup.
+
+# Read door_list.txt and put every saved door into door_list.
+# This runs once, when the app starts.
 def load_doors():
+    # "try" lets us handle the error if the file doesn't exist yet.
     try:
-        # Open the file in read mode ("r"). utf-8 ensures normal text is handled correctly.
+        # Open the file for reading ("r"). "with" closes the file automatically when done.
         with FILE_PATH.open("r", encoding="utf-8") as file:
+            # Each line in the file is one door.
             for line in file:
-                # Ignore completely blank lines rather than trying to treat them as doors.
+                # Skip empty lines.
                 if not line.strip():
                     continue
 
-                # Start with a temporary empty Door, then populate it from the line.
+                # Make an empty Door, then fill it in from the line of text.
                 door = Door("", "", "", "", "", "", "")
                 try:
                     door.from_single_line(line)
                 except ValueError as error:
-                    # A malformed saved line should not stop the rest of the file from loading.
+                    # The line was broken (wrong number of values). Skip just
+                    # this line and keep loading the rest of the file.
                     print(f"Skipped invalid door entry: {error}")
                     continue
 
-                # Store both the Door object and its individual values. The object is used
-                # for saving, while the individual values are used by the existing menu code.
                 door_list.append(door)
 
     except FileNotFoundError:
-        # If the file does not exist yet, create an empty file so future saves can use it.
+        # First time running the app: there is no save file yet, so create an empty one.
         FILE_PATH.touch()
 
-# Rewrite door_list.txt with the complete current state of the in-memory door_list.
+
+# Save every door in door_list to door_list.txt, one door per line.
+# This is called after every add, remove, and edit, so nothing is lost if
+# the app closes.
 def save_doors():
-    # Open in write mode ("w"), which replaces the old file contents instead of appending.
+    # "w" (write) mode erases the old file and writes it fresh, so the file
+    # always matches door_list exactly.
     with FILE_PATH.open("w", encoding="utf-8") as file:
         for door in door_list:
-
+            # "\n" starts a new line, so each door goes on its own line.
             file.write(door.to_single_line() + "\n")
 
-# Function to add a new door to the list. It prompts the user for door details then creates a new Door object and appends it to the door_list. The user can also view the current list of doors or quit the operation.
+
+# Add new doors. Asks for a door name and then the status of each device.
+# Keeps looping so several doors can be added in a row.
+# Q = go back to the main menu, L = show the door list.
 def add_door():
     while True:
         print(f"Please enter the door name and the status of each device: C - Complete, P - Pending, R - Restrained, N - N/a")
         print()
         new_door_name = input(f"Door Name: \n")
 
+        # Check the name before asking for any device statuses.
         if new_door_name == "Q":
             return
         elif new_door_name == "L":
             list_doors()
+            # continue jumps back to the top of the while loop to ask for a name again.
             continue
         elif not is_valid_name(new_door_name):
             continue
         elif find_door(new_door_name) is not None:
+            # A door with this name already exists.
             print(f"{new_door_name} already exist please change the entry.")
             continue
 
+        # Ask for each device's status. ask_status() only accepts C, P, R, N or Q.
+        # If the user types Q at any point, leave without saving this door.
         new_door_status = ask_status("Status")
         if new_door_status == "Q":
             return
-        
+
         new_card_reader = ask_status("Card Reader")
         if new_card_reader == "Q":
             return
-        
+
         new_door_contact = ask_status("Door Contact")
         if new_door_contact == "Q":
             return
-        
+
         new_lock = ask_status("Lock")
         if new_lock == "Q":
             return
-        
+
         new_rex = ask_status("REX")
         if new_rex == "Q":
             return
-        
+
         new_door_restraint = ask_status("Restraint")
         if new_door_restraint == "Q":
             return
-        
+
         else:
+            # Everything has been entered: build the Door and add it to the list.
             new_door = Door(new_door_name, new_door_status, new_card_reader, new_door_contact, new_lock, new_rex, new_door_restraint)
             door_list.append(new_door)
 
-            # Immediately rewrite door_list.txt so the newly added door survives a restart.
+            # Save right away so the new door is kept even if the app closes.
             save_doors()
             print(Fore.GREEN+f"\n{new_door_name} successfully added to the list.\n")
 
-# Function to remove a door from the list. It prompts the user for the name of the door to remove, searches for it in the door_list, and removes it if found. The user can also view the current list of doors or quit the operation.
+
+# Remove doors. Asks for a door name, confirms with Y/N, then deletes it.
+# Keeps looping so several doors can be removed in a row.
+# Q = go back to the main menu, L = show the door list.
 def remove_door():
     while True:
         print("Please enter the name of the door you would like to remove. L - view door list, Q - quit. CHOICES ARE CASE-SENSITIVE.")
@@ -181,23 +244,29 @@ def remove_door():
         if found_door is None:
             print(f"{remove_door_name} is not on the list.\n")
             continue
-            
+
+        # Ask before deleting, since a deleted door can't be brought back.
         print(Fore.RED+f"Are you sure you want to DELETE: "+f"{remove_door_name} [Y/N]")
         choice = input().upper()
         if choice == "Y":
             door_list.remove(found_door)
+            # Save so the door is also gone from door_list.txt.
             save_doors()
             print(Fore.RED+f"\n{remove_door_name} has been DELETED from the list.\n")
         elif choice == "N":
             print()
             continue
-            
+
         else:
             print("Invalid option please try again.")
             print()
-            continue   
+            continue
 
-# Function to edit a doors attributes.
+
+# Edit one thing about a door: its name or one device's status.
+# Shows the door's current info, asks what to change, then saves the change.
+# Q at the door name = go back to the main menu.
+# Q at any later question = cancel and start over with a new door name.
 def edit_door():
 
     while True:
@@ -206,13 +275,13 @@ def edit_door():
 
         if door_to_edit == "Q":
             return
-        # create variable to track and then check whether or not the user input is in the list
+
         found_door = find_door(door_to_edit)
         if found_door is None:
             print(f"Not in list please try again")
             continue
 
-        #print all information for the chosen door so the user cna see it before editing
+        # Show everything about the door so the user can see it before changing it.
         print(f"You chose to edit: {door_to_edit}")
         print(f"Name:         {status_color(found_door.name)}")
         print(f"Status:       {status_color(found_door.status)}")
@@ -222,7 +291,7 @@ def edit_door():
         print(f"REX:          {status_color(found_door.rex)}")
         print(f"Restraint:    {status_color(found_door.restraint)}")
 
-        # small menu of options to edit
+        # Menu of what can be edited.
         print("####################################################")
         print(f"N - Door name, S - Status, C - Card Reader")
         print(f"D - Door Contact, L - Lock, E - REX, R - Restraint")
@@ -231,7 +300,9 @@ def edit_door():
         choice = input(f"What would you like to edit?\n")
 
 
-        #tupel of options to choose from
+        # A dictionary that matches each menu letter to two things:
+        #   1. the attribute name on the Door object (for example "lock" means door.lock)
+        #   2. a readable label to show the user
         options_to_edit = {
             "N": ("name", "Door name"),
             "S": ("status", "Status"),
@@ -244,60 +315,70 @@ def edit_door():
 
         if choice == "Q":
             continue
-
-        if choice == "N" and not is_valid_name(new_label):
-            continue
-
         elif choice not in options_to_edit:
             print(f"Invalid option try again. OPTIONS ARE CASE-SENSIITVE.")
             continue
 
-        # check if the new name chosen by the user is int he list
-        if choice == "N" and find_door(new_label) is not None:
-            print(f"\n{new_label} already exists in the list. Please choose another name.\n")
-            continue
-
-     # print the door and antribute of the door that is being edited
+        # Unpack the two values for the chosen letter.
+        # Example: choice "L" gives attribute = "lock" and label = "Lock".
         attribute, label = options_to_edit[choice]
         print(f"\nEditing door: {found_door.name}, {label}:\n")
 
+        # 1. Get the new value. A name can be any text, but a status must be
+        #    C, P, R or N, so statuses go through ask_status().
         if choice == "N":
             new_label = input("Enter the door name.\n")
         else:
             new_label = ask_status("Enter updated status")
 
+        # 2. Q means cancel: start over without changing anything.
         if new_label == "Q":
             continue
-    
+
+        # 3. For a new name, make sure it's valid and not already used by another door.
+        if choice == "N" and not is_valid_name(new_label):
+            continue
+        if choice == "N" and find_door(new_label) is not None:
+            print(f"\n{new_label} already exists in the list. Please choose another name.\n")
+            continue
+
+        # 4. Save the change.
+        # setattr(found_door, "lock", "C") does the same thing as found_door.lock = "C".
+        # We use setattr because the attribute name is stored in a variable.
         setattr(found_door, attribute, new_label)
         save_doors()
         print(f"Data has been updated.\n")
-        
-# Function to list all doors in the list. It prints each door name on a new line.
+
+
+# Print every door and the status of each of its devices.
+# Statuses are colored by status_color(): green = C, yellow = P, red = R.
 def list_doors():
     print("\nList of all doors:\n")
 
     for door in door_list:
-        
-        print(f"---------------------------------------------------------------------------------------------------------------------------------------")  # Print the door name, status, location, and restraint
-        print(f"Door:         {status_color(door.name)}")  # Print the door name
-        print(f"Status:       {status_color(door.status)}")  # Print the door status
-        print(f"Card Reader:  {status_color(door.card_reader)}")  # Print the door card reader
-        print(f"Door Contact: {status_color(door.door_contact)}")  # Print the door contact
-        print(f"Lock:         {status_color(door.lock)}")  # Print the door lock
-        print(f"REX:          {status_color(door.rex)}")  # Print the door REX
-        print(f"Restraint:    {status_color(door.restraint)}")  # Print the door restraint
-        print(f"---------------------------------------------------------------------------------------------------------------------------------------\n")  # Print a separator line
 
-# This block only runs when trackerapp_2.py is executed directly. It will not run
-# merely because another Python file imports this module.
+        print(f"---------------------------------------------------------------------------------------------------------------------------------------")  # Separator line between doors
+        print(f"Door:         {status_color(door.name)}")
+        print(f"Status:       {status_color(door.status)}")
+        print(f"Card Reader:  {status_color(door.card_reader)}")
+        print(f"Door Contact: {status_color(door.door_contact)}")
+        print(f"Lock:         {status_color(door.lock)}")
+        print(f"REX:          {status_color(door.rex)}")
+        print(f"Restraint:    {status_color(door.restraint)}")
+        print(f"---------------------------------------------------------------------------------------------------------------------------------------\n")  # Separator line between doors
+
+
+# This is where the app actually starts.
+# The code below only runs when you run this file directly
+# (python trackerapp_2.py), not when another file imports it.
 if __name__ == "__main__":
-    # quit is True while the main menu should continue running.
+    # The main loop keeps running while quit is True.
+    # (The name is a little backwards: menu() sets it to False when the user picks Q.)
     quit = True
 
-    # Restore saved doors before the first menu is displayed.
+    # Load the saved doors before showing the menu.
     load_doors()
 
-    # Repeatedly show the menu until menu() changes quit to False.
+    # Show the menu again and again until the user quits.
     while quit:
         menu()
