@@ -500,6 +500,56 @@ class TestGuiEditDoor(GuiTestBase):
         self.assertFalse(edit["window"].winfo_exists())
 
 
+# ---------------------------------------------------------------------------
+# The GUI's Remove Door button
+# ---------------------------------------------------------------------------
+class TestGuiRemoveDoor(GuiTestBase):
+
+    SAVED_DOORS = [
+        {"name": "Joes Door", "devices": {"Lock": "P"}},
+        {"name": "Delete Me", "devices": {"REX": "C"}},
+    ]
+
+    # Helper: click a door's row in the main table and return the row.
+    def select_door(self, name):
+        tree = self.gui["tree"]
+        for row in tree.get_children():
+            if tree.item(row, "text") == name:
+                tree.selection_set(row)
+                return row
+
+    # Helper: the names of the doors in the main table.
+    def table_names(self):
+        return [name for name, status, devices in self.table_rows()]
+
+    def test_nothing_selected_shows_error(self):
+        self.gui["remove_selected_door"]()
+        self.assertEqual(self.errors, ["Click a door in the list first"])
+        self.assertEqual(len(data.door_list), 2)
+
+    def test_no_keeps_the_door(self):
+        self.answer_yes = False
+        self.select_door("Delete Me")
+        self.gui["remove_selected_door"]()
+        self.assertEqual(self.table_names(), ["Joes Door", "Delete Me"])
+        self.assertEqual(len(self.saved_file()), 2)
+
+    def test_yes_removes_the_door(self):
+        self.select_door("Delete Me")
+        self.gui["remove_selected_door"]()
+        # Gone from the table and the save file. The other door is untouched.
+        self.assertEqual(self.table_names(), ["Joes Door"])
+        self.assertEqual(self.saved_file(), [{"name": "Joes Door", "devices": {"Lock": "P"}}])
+
+    def test_selecting_device_row_removes_its_door(self):
+        tree = self.gui["tree"]
+        door_row = self.select_door("Delete Me")
+        # Click the device row under the door instead of the door itself.
+        tree.selection_set(tree.get_children(door_row)[0])
+        self.gui["remove_selected_door"]()
+        self.assertEqual(self.table_names(), ["Joes Door"])
+
+
 # This lets you also run the file directly: .venv/bin/python test_tracker.py
 if __name__ == "__main__":
     unittest.main()

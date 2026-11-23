@@ -56,7 +56,7 @@ def refresh_tree():
 # Find the door that's selected (clicked) in the table.
 # If a device row is selected, use the door it belongs to.
 # Returns the Door object, or None if nothing is selected.
-# Used by Edit Door (and Remove Door in the next step).
+# Used by Edit Door and Remove Door.
 def get_selected_door():
     # tree.selection() gives the selected rows. It's empty if nothing is clicked.
     selected = tree.selection()
@@ -342,16 +342,27 @@ def open_edit_door():
     # Fill the device list when the window first opens.
     refresh_devices()
 
+
+# Remove the door selected in the table, after asking to confirm.
+# Runs when the Remove Door button is clicked.
+# Named remove_selected_door so it isn't confused with remove_door() in the
+# terminal version (trackerapp_2.py).
 def remove_selected_door():
     door = get_selected_door()
     if door is None:
         messagebox.showerror("No door selected", "Click a door in the list first")
         return
 
+    # Ask first, since a removed door can't be brought back.
+    # "\n" starts a new line inside the pop-up message.
+    # icon="warning" shows a warning symbol instead of a question mark.
+    # The icon name must be lowercase: error, info, question, or warning.
     if messagebox.askyesno("Remove door", f"Delete {door.name} and all its devices?\nThis can't be undone.", icon="warning"):
         data.door_list.remove(door)
+        # Save so the door is also gone from door_list.json.
         data.save_doors()
         refresh_tree()
+
 
 ##########################################################################
 # Build the main window. Everything below runs once, when the app starts.
@@ -376,8 +387,10 @@ button_frame.pack(side="bottom", fill="x", padx=10, pady=(0, 10))
 tk.Button(button_frame, text="Add Door", command=open_add_door).pack(side="left")
 # padx=(10, 0) puts 10 pixels of space on the left of the button, none on the right.
 tk.Button(button_frame, text="Edit Door", command=open_edit_door).pack(side="left", padx=(10, 0))
-
+# side="right" puts Remove Door on the far right, away from Add and Edit,
+# so it's harder to click by accident.
 tk.Button(button_frame, text="Remove Door", command=remove_selected_door).pack(side="right")
+
 # A Treeview is a table where rows can have rows inside them, like folders.
 # Column "#0" is the built-in first column (door or device name).
 # columns=("status",) adds one more column, called "status".
