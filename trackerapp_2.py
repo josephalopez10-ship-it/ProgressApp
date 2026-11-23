@@ -16,6 +16,14 @@ FILE_PATH = Path(__file__).resolve().with_name("door_list.txt")
 # This in-memory list contains all Door records while the application is running.
 # The file on disk is used to preserve those records after the program closes.
 door_list = []
+VALID_STATUSES = ["C", "P", "R", "N"]
+
+def ask_status(prompt):
+    while True:
+        value = input(f"{prompt}: \n").upper()
+        if value in VALID_STATUSES or value == "Q":
+            return value
+        print(Fore.RED+f"{value}is not a valid entry. Please enter C,P,R, or N (Q to quit)")
 
 # functions that finds what color to display the device status when listed to the user.
 def status_color(value):
@@ -94,7 +102,7 @@ def save_doors():
     # Open in write mode ("w"), which replaces the old file contents instead of appending.
     with FILE_PATH.open("w", encoding="utf-8") as file:
         for door in door_list:
-            
+
             file.write(door.to_single_line() + "\n")
 
 # Function to add a new door to the list. It prompts the user for door details then creates a new Door object and appends it to the door_list. The user can also view the current list of doors or quit the operation.
@@ -116,27 +124,27 @@ def add_door():
             print(f"{new_door_name} already exist please change the entry.")
             continue
 
-        new_door_status = input(f"Door Status: \n").upper()
+        new_door_status = ask_status("Status")
         if new_door_status == "Q":
             return
         
-        new_card_reader = input(f"Card Reader: \n").upper()
+        new_card_reader = ask_status("Card Reader")
         if new_card_reader == "Q":
             return
         
-        new_door_contact = input(f"Door Contact: \n").upper()
+        new_door_contact = ask_status("Door Contact")
         if new_door_contact == "Q":
             return
         
-        new_lock = input(f"Lock: \n").upper()
+        new_lock = ask_status("Lock")
         if new_lock == "Q":
             return
         
-        new_rex = input(f"REX: \n").upper()
+        new_rex = ask_status("REX")
         if new_rex == "Q":
             return
         
-        new_door_restraint = input("Restraint: \n").upper()
+        new_door_restraint = ask_status("Restraint")
         if new_door_restraint == "Q":
             return
         
@@ -237,16 +245,18 @@ def edit_door():
         # print the door and antribute of the door that is being edited
         attribute, label = options_to_edit[choice]
         print(f"\nEditing door: {found_door.name}, {label}:\n")
-        new_label = input(f"\nEnter updated information.\n")
 
-        if choice != "N":
-            new_label = new_label.upper()
+        if choice == "N":
+            new_label = input("Enter the door name.\n")
+        else:
+            new_label = ask_status("Enter updated status")
+
+        if new_label == "Q":
+            continue
 
         # check if the new name chosen by the user is int he list
         if choice == "N" and find_door(new_label) is not None:
             print(f"\n{new_label} already exists in the list. Please choose another name.\n")
-            continue
-        if new_label == "Q":
             continue
 
         setattr(found_door, attribute, new_label)
