@@ -73,6 +73,22 @@ def get_selected_door():
     return data.find_door(tree.item(row, "text"))
 
 
+# Runs when a row in the table is double-clicked: open the Edit window for it.
+# "event" holds details about the click, like where the mouse was (event.y).
+def row_double_clicked(event):
+    # identify_row() gives the row under the mouse, or "" if the click was
+    # on empty space below the last row.
+    row = tree.identify_row(event.y)
+    if row == "":
+        return "break"
+    # Select the clicked row, then open Edit for it like the Edit Door button.
+    tree.selection_set(row)
+    open_edit_door()
+    # "break" stops tkinter's normal double-click action, which would also
+    # collapse or expand the door's device list.
+    return "break"
+
+
 # Open the "Add Door" window. Runs when the Add Door button is clicked.
 def open_add_door():
     # Toplevel = a second window that opens on top of the main one.
@@ -335,7 +351,17 @@ def open_edit_door():
 
     tk.Button(edit_window, text="Add device", command=add_device).grid(row=5, column=2, padx=10, pady=5)
 
-    # --- Row 6: Close button ---
+    # --- Row 6 (left side): Delete Door button ---
+    # Deletes the whole door. If Yes is clicked, the door is gone, so this
+    # window closes too. It's on the left, away from Close, so it's harder to
+    # click by accident.
+    def delete_this_door():
+        if confirm_and_delete_door(door, edit_window):
+            edit_window.destroy()
+
+    tk.Button(edit_window, text="Delete Door", command=delete_this_door).grid(row=6, column=0, sticky="w", padx=10, pady=10)
+
+    # --- Row 6 (right side): Close button ---
     # Changes are already saved, so Close just closes the window.
     tk.Button(edit_window, text="Close", command=edit_window.destroy).grid(row=6, column=2, padx=10, pady=10)
 
@@ -343,8 +369,27 @@ def open_edit_door():
     refresh_devices()
 
 
-# Remove the door selected in the table, after asking to confirm.
-# Runs when the Remove Door button is clicked.
+# Ask "are you sure?", then delete the door if Yes is clicked.
+# parent = the window the pop-up should appear on top of.
+# Returns True if the door was deleted, False if the user clicked No.
+# Used by the Remove Door button and the Delete Door button in the Edit window,
+# so the confirm-and-delete steps are only written once.
+def confirm_and_delete_door(door, parent):
+    # Ask first, since a removed door can't be brought back.
+    # "\n" starts a new line inside the pop-up message.
+    # icon="warning" shows a warning symbol instead of a question mark.
+    # The icon name must be lowercase: error, info, question, or warning.
+    if messagebox.askyesno("Remove door", f"Delete {door.name} and all its devices?\nThis can't be undone.",
+                           icon="warning", parent=parent):
+        data.door_list.remove(door)
+        # Save so the door is also gone from door_list.json.
+        data.save_doors()
+        refresh_tree()
+        return True
+    return False
+
+
+# Remove the door selected in the table. Runs when Remove Door is clicked.
 # Named remove_selected_door so it isn't confused with remove_door() in the
 # terminal version (trackerapp_2.py).
 def remove_selected_door():
@@ -352,16 +397,7 @@ def remove_selected_door():
     if door is None:
         messagebox.showerror("No door selected", "Click a door in the list first")
         return
-
-    # Ask first, since a removed door can't be brought back.
-    # "\n" starts a new line inside the pop-up message.
-    # icon="warning" shows a warning symbol instead of a question mark.
-    # The icon name must be lowercase: error, info, question, or warning.
-    if messagebox.askyesno("Remove door", f"Delete {door.name} and all its devices?\nThis can't be undone.", icon="warning"):
-        data.door_list.remove(door)
-        # Save so the door is also gone from door_list.json.
-        data.save_doors()
-        refresh_tree()
+    confirm_and_delete_door(door, window)
 
 
 ##########################################################################
@@ -400,6 +436,10 @@ tree.heading("status", text="Status")
 tree.column("status", width=80, anchor="center")
 # fill="both" + expand=True make the table grow when the window is resized.
 tree.pack(fill="both", expand=True, padx=10, pady=10)
+
+# Double-clicking a door (or one of its devices) opens the Edit window.
+# "<Double-1>" means a double-click with mouse button 1 (the left button).
+tree.bind("<Double-1>", row_double_clicked)
 
 # Rows tagged "C" show in green, "P" in yellow, "R" in red.
 for status, color in STATUS_COLORS.items():

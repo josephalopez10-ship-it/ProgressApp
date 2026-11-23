@@ -499,6 +499,63 @@ class TestGuiEditDoor(GuiTestBase):
         edit["buttons"]["Close"].invoke()
         self.assertFalse(edit["window"].winfo_exists())
 
+    # Helper: double-click the table at height y, the way a real mouse does:
+    # press and release the left button twice, quickly.
+    def double_click_at(self, y):
+        tree = self.gui["tree"]
+        for click in range(2):
+            tree.event_generate("<ButtonPress-1>", x=40, y=y)
+            tree.event_generate("<ButtonRelease-1>", x=40, y=y)
+        self.gui["window"].update()
+
+    # Helper: double-click on a row in the table.
+    def double_click_row(self, row):
+        self.gui["window"].update()
+        # bbox() gives the row's position on screen: x, y, width, height.
+        x, y, width, height = self.gui["tree"].bbox(row)
+        self.double_click_at(y + height // 2)
+
+    # Helper: titles of the pop-up windows that are open.
+    def open_window_titles(self):
+        window = self.gui["window"]
+        return [w.title() for w in window.winfo_children() if isinstance(w, tk.Toplevel)]
+
+    def test_double_click_door_opens_edit(self):
+        door_row = self.select_door("Joes Door")
+        self.double_click_row(door_row)
+        self.assertEqual(self.open_window_titles(), ["Edit Door - Joes Door"])
+        # The door's device list must NOT collapse (that's what return "break" stops).
+        self.assertTrue(self.gui["tree"].item(door_row, "open"))
+
+    def test_double_click_device_opens_its_door(self):
+        tree = self.gui["tree"]
+        door_row = self.select_door("alex door")
+        self.double_click_row(tree.get_children(door_row)[0])
+        self.assertEqual(self.open_window_titles(), ["Edit Door - alex door"])
+
+    def test_double_click_empty_space_does_nothing(self):
+        self.gui["window"].update()
+        # Far below the last row, where there's nothing to click.
+        self.double_click_at(450)
+        self.assertEqual(self.open_window_titles(), [])
+        self.assertEqual(self.errors, [])
+
+    def test_delete_door_button_no_keeps_it(self):
+        self.answer_yes = False
+        edit = self.open_edit_window("alex door")
+        edit["buttons"]["Delete Door"].invoke()
+        self.assertEqual(len(data.door_list), 2)
+        # The Edit window stays open.
+        self.assertTrue(edit["window"].winfo_exists())
+
+    def test_delete_door_button_yes_deletes_and_closes(self):
+        edit = self.open_edit_window("alex door")
+        edit["buttons"]["Delete Door"].invoke()
+        self.assertEqual([name for name, status, devices in self.table_rows()], ["Joes Door"])
+        self.assertEqual(len(self.saved_file()), 1)
+        # The door is gone, so the Edit window closes.
+        self.assertFalse(edit["window"].winfo_exists())
+
 
 # ---------------------------------------------------------------------------
 # The GUI's Remove Door button
