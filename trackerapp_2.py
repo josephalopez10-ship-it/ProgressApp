@@ -29,13 +29,6 @@ def status_color(value):
             return value
         return f"{color}{value}{Style.RESET_ALL}"
 
-#functions that handles checking if the door that the user has inputed is in the door list.
-def find_door(name):
-    for door in door_list:
-        if door[1] == name:
-            return door
-    return None
-
 # Basic menu function to display options to the user and call the appropriate functions based on user input
 def menu():
     print("                     ************************************************")
@@ -62,6 +55,12 @@ def menu():
         print("Invalid choice. Please try again.")
         return True
 
+#functions that handles checking if the door that the user has inputed is in the door list.
+def find_door(name):
+    for door in door_list:
+        if door[1] == name:
+            return door
+    return None
 
 # Read door_list.txt and rebuild the in-memory door_list at startup.
 def load_doors():
@@ -98,7 +97,6 @@ def load_doors():
         # If the file does not exist yet, create an empty file so future saves can use it.
         FILE_PATH.touch()
 
-
 # Rewrite door_list.txt with the complete current state of the in-memory door_list.
 def save_doors():
     # Open in write mode ("w"), which replaces the old file contents instead of appending.
@@ -115,16 +113,16 @@ def add_door():
         print()
         new_door_name = input(f"Door Name: \n")
 
-        if find_door(new_door_name) is not None:
-            print(f"{new_door_name} already exist please change the entry.")
-            continue
-        elif new_door_name == "Q":
+        if new_door_name == "Q":
             return
-        
+                
         # Entering uppercase L here calls the list screen and continue restarts this
         # while loop. That allows the user to choose "L" again or enter another door.
         elif new_door_name == "L":
             list_doors()
+            continue
+        elif find_door(new_door_name) is not None:
+            print(f"{new_door_name} already exist please change the entry.")
             continue
 
         new_door_status = input(f"Door Status: \n").upper()
@@ -167,31 +165,23 @@ def remove_door():
         remove_door_name = input("Door Name: ")
         print()
 
+        if remove_door_name == "Q":
+            return
+        if remove_door_name == "L":
+            list_doors()
+            continue
+
         found_door = find_door(remove_door_name)
         if found_door is None:
             print(f"{remove_door_name} is not on the list.\n")
             continue
-       
-            # Entering uppercase L displays the current list without ending or restarting
-            # the remove workflow; continue then prompts for another door name.
             
         print(Fore.RED+f"Are you sure you want to DELETE: "+f"{remove_door_name} [Y/N]")
         choice = input().upper()
         if choice == "Y":
-            for door in door_list:
-                if door[1] == remove_door_name:
-                    door_list.remove(door)
-                    # Save after removal so door_list.txt no longer contains the deleted door.
-                    save_doors()
-                    print(Fore.RED+f"\n{remove_door_name} has been DELETED from the list.\n")
-                    print()
-                    continue  # Continue the while loop to allow removing more doors or quitting.
-                        
-                else:
-                    print(f"{remove_door_name} is not in the door list.")
-                    print()
-                    continue
-
+            door_list.remove(found_door)
+            save_doors()
+            print(Fore.RED+f"\n{remove_door_name} has been DELETED from the list.\n")
         elif choice == "N":
             print()
             continue
@@ -210,12 +200,8 @@ def edit_door():
 
         if door_to_edit == "Q":
             return
-        # create variable to track whethe or not the userinput is in the list
-        found_door = None
-    
-        # check to see if user input is in the current list of doors
-        find_door(door_to_edit)
-
+        # create variable to track and then check whether or not the user input is in the list
+        found_door = find_door(door_to_edit)
         if found_door is None:
             print(f"Not in list please try again")
             continue
