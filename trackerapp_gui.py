@@ -22,8 +22,8 @@ def refresh_tree():
 
         door_row = tree.insert("", "end", text=door.name, values=(status,),tags=(status,), open=True)
 
-        for device_name, device_status in door.devics.items():
-            tree.insert(door_row, "end", text+device_name, values=(device_status,),tags=(device_status,))
+        for device_name, device_status in door.devices.items():
+            tree.insert(door_row, "end", text=device_name, values=(device_status,),tags=(device_status,))
 
 data.load_doors()
 
