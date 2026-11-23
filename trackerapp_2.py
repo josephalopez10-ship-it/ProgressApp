@@ -15,13 +15,13 @@
 # All doors are saved in door_list.json, so they are still there the next time
 # the app starts.
 
-# json is built into Python. It saves and reads lists and dictionaries as text.
+# json saves and reads lists and dictionaries as text.
 import json
-# sys lets us close the app on purpose with sys.exit().
+# sys lets us exit the app.
 import sys
 # Path is a built-in tool for working with file locations.
 from pathlib import Path
-# Door is the class from door.py that holds one door's information.
+# Door class holds informationa about a door liuek name stauts and dveices.
 from door import Door
 # colorama lets us print colored text in the terminal.
 # Fore = text colors, Style.RESET_ALL = go back to normal color.
@@ -31,10 +31,14 @@ init(autoreset=True)
 
 # Where the save file lives. This always points to door_list.json in the same
 # folder as this script, no matter which folder you run the app from.
+
+
 FILE_PATH = Path(__file__).resolve().with_name("door_list.json")
 
 # Every door is stored in this list while the app is running.
 # Each item in the list is a Door object (see door.py).
+
+
 door_list = []
 
 # The only status letters a device is allowed to have.
@@ -44,7 +48,6 @@ VALID_STATUSES = ["C", "P", "R", "N"]
 # Ask the user for a device status, and keep asking until they type a valid one.
 # prompt = the text shown to the user, for example "Card Reader status".
 # Returns "C", "P", "R", "N", or "Q" (if the user wants to quit).
-# Lowercase is accepted, because .upper() turns "c" into "C".
 def ask_status(prompt):
     while True:
         value = input(f"{prompt}: \n").strip().upper()
@@ -64,10 +67,12 @@ def status_color(value):
         "P": Fore.YELLOW,
         "R": Fore.RED,
     }
+
     # .get() returns None instead of crashing if the letter isn't in the dictionary.
     color = colors.get(value)
     if color is None:
         return value
+    
     # Color code + the letter + reset code, so only this letter is colored.
     return f"{color}{value}{Style.RESET_ALL}"
 
