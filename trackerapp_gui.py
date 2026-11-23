@@ -1,101 +1,191 @@
+# DOOR TRACKER APP - GUI VERSION
+# A window version of trackerapp_2.py. It uses the same door_list.json,
+# so doors added in either version show up in both.
+#
+# How a GUI runs is different from the terminal version:
+#   1. The code below builds the window (table, buttons).
+#   2. window.mainloop() at the very bottom then waits for the user.
+#   3. When a button is clicked, the function connected to it runs.
+# So instead of "while True" loops with input(), each action is a function
+# that runs when its button is clicked.
+
+# tkinter is Python's built-in GUI library. "tk" is a short nickname for it.
 import tkinter as tk
-
+# ttk has nicer-looking versions of tkinter's widgets, like the Treeview table
+# and the Combobox dropdown.
 from tkinter import ttk
+# messagebox shows pop-up error and confirmation boxes.
 from tkinter import messagebox
+# The Door class, to create new doors.
 from door import Door
-
+# Reuse the door list and the load/save functions from the terminal version.
+# "as data" means we write data.door_list, data.save_doors(), and so on.
 import trackerapp_2 as data
 
+# The text color for each status. These are hex color codes (#RRGGBB).
+# N isn't listed, so N rows use the normal text color.
 STATUS_COLORS = {
     "C": "#2e7d32",   # green
     "P": "#b58900",   # yellow
     "R": "#c62828",   # red
-
-
 }
 
-def refresh_tree():
 
+# Clear the table and fill it again from door_list.
+# Call this whenever a door is added, edited, or removed, so the table
+# always matches the saved data.
+def refresh_tree():
+    # Remove every row currently in the table.
     for row in tree.get_children():
         tree.delete(row)
 
     for door in data.door_list:
         status = door.status()
+        # Add the door as a top-level row. "" means it has no parent row,
+        # and "end" puts it at the bottom of the table.
+        # values=(status,) fills the Status column. The comma makes it a
+        # tuple (a list that can't change), which Treeview expects.
+        # tags=(status,) lets us color the row by its status (see the bottom).
+        # open=True shows the door's devices without having to click the arrow.
+        door_row = tree.insert("", "end", text=door.name, values=(status,), tags=(status,), open=True)
 
-        door_row = tree.insert("", "end", text=door.name, values=(status,),tags=(status,), open=True)
-
+        # Add each device as a row underneath its door (door_row is the parent).
         for device_name, device_status in door.devices.items():
-            tree.insert(door_row, "end", text=device_name, values=(device_status,),tags=(device_status,))
+            tree.insert(door_row, "end", text=device_name, values=(device_status,), tags=(device_status,))
 
 
+# Open the "Add Door" window. Runs when the Add Door button is clicked.
 def open_add_door():
+    # Toplevel = a second window that opens on top of the main one.
     add_window = tk.Toplevel(window)
     add_window.title("Add door")
-
+    # grab_set() stops clicks on the main window until this one is closed.
     add_window.grab_set()
 
+    # Build the door with no name yet. Devices get added to it as the user
+    # clicks Add Device, and the name is filled in when they click Save Door.
     new_door = Door("")
 
+    # --- Row 0: door name ---
+    # grid() places widgets in rows and columns, like a spreadsheet.
+    # sticky="w" lines the widget up on the left (w = west).
+    # padx / pady add empty space around the widget, in pixels.
     tk.Label(add_window, text="Door name:").grid(row=0, column=0, sticky="w", padx=10, pady=5)
-    name_entry =tk.Entry(add_window, width=30)
-    name_entry.grid(row="0", column="1", sticky="w", padx=10)
+    # An Entry is a one-line box the user can type in.
+    name_entry = tk.Entry(add_window, width=30)
+    # columnspan=2 lets the name box stretch across columns 1 and 2.
+    name_entry.grid(row=0, column=1, columnspan=2, sticky="w", padx=10, pady=5)
 
+    # --- Row 1: device name box + status dropdown ---
+    tk.Label(add_window, text="Device:").grid(row=1, column=0, sticky="w", padx=10)
+    device_entry = tk.Entry(add_window, width=20)
+    device_entry.grid(row=1, column=1, sticky="w", padx=10)
+    # A Combobox is a dropdown. state="readonly" means you can only pick
+    # from the list (C, P, R, N), not type something else.
     status_box = ttk.Combobox(add_window, values=data.VALID_STATUSES, width=4, state="readonly")
+    # Start the dropdown on P, since most devices start out pending.
     status_box.set("P")
     status_box.grid(row=1, column=2, padx=10)
 
+    # --- Row 3: list of the devices added so far ---
+    # sticky="we" stretches it from the left edge to the right edge (west to east).
     device_listbox = tk.Listbox(add_window, height=8)
     device_listbox.grid(row=3, column=0, columnspan=3, sticky="we", padx=10, pady=5)
 
+    # Runs when Add Device is clicked.
+    # This function is INSIDE open_add_door, so it can use device_entry,
+    # status_box, new_door, and the other things created above.
     def add_device():
-        device_name = device_entry,get().strip()
+        # .get() reads what's typed in the box. .strip() removes extra spaces.
+        device_name = device_entry.get().strip()
         if device_name == "":
             messagebox.showerror("Missing device", "Type a device name first.", parent=add_window)
+            # return leaves the function early, so nothing gets added.
             return
+        # find_device ignores upper/lowercase, so "lock" matches "Lock".
         if new_door.find_device(device_name) is not None:
-            messagebox.showerror("Duplaicate device", f"{device_name} is already on this door.", parent=add_window)
+            messagebox.showerror("Duplicate device", f"{device_name} is already on this door.", parent=add_window)
             return
+
         device_status = status_box.get()
         new_door.devices[device_name] = device_status
 
-        device_listbox.inset("end", f"{device_name}  {device_status}")
-        device_entry.delete(0,"end")
-    tk.button(add_window, text="Add Device", command=add_device).grid(row=2, column=2, padx=10, pady=10)
+        # Show the device in the list, then empty the box ready for the next one.
+        # .delete(0, "end") deletes from the first character (0) to the last.
+        device_listbox.insert("end", f"{device_name}   {device_status}")
+        device_entry.delete(0, "end")
 
+    # --- Row 2: Add Device button ---
+    # command=add_device means "run add_device when clicked".
+    # There's no () after the name: we're handing over the function to run
+    # later, not running it now.
+    tk.Button(add_window, text="Add Device", command=add_device).grid(row=2, column=2, padx=10, pady=5)
+
+    # Runs when Save Door is clicked.
     def save_door():
         name = name_entry.get().strip()
         if name == "":
-            messagebox.showererror("Missing name", "Door name cannot be blank.", parent=add_window)
+            messagebox.showerror("Missing name", "Door name cannot be blank.", parent=add_window)
             return
-
+        # find_door ignores upper/lowercase, so "joes door" matches "Joes Door".
         if data.find_door(name) is not None:
-            messagebox.showerror("Duplicate door", f"{name} already exists", parent=add_window)
+            messagebox.showerror("Duplicate door", f"{name} already exists.", parent=add_window)
             return
 
-        new_door.anme = name
-        data.door_list.appand(new_door)
+        new_door.name = name
+        data.door_list.append(new_door)
+        # Save to door_list.json so the door is kept after the app closes.
+        data.save_doors()
+        # Redraw the main table so the new door shows up.
         refresh_tree()
+        # Close the Add door window.
+        add_window.destroy()
 
-    tk.Button(add_window, text="Save Door", command=save_door).grid(row=4, column=2, pady=10)
+    # --- Row 4: Save Door and Cancel buttons ---
+    # sticky="e" lines Save Door up on the right (e = east), next to Cancel.
+    tk.Button(add_window, text="Save Door", command=save_door).grid(row=4, column=1, sticky="e", pady=10)
+    # Cancel just closes the window. new_door was never added to door_list,
+    # so nothing is saved.
+    tk.Button(add_window, text="Cancel", command=add_window.destroy).grid(row=4, column=2, pady=10)
 
+
+# ---------------------------------------------------------------------------
+# Build the main window. Everything below runs once, when the app starts.
+# ---------------------------------------------------------------------------
+
+# Load the saved doors before building the window.
 data.load_doors()
+
+# Create the main window.
 window = tk.Tk()
 window.title("TrackerApp")
-window.geometry("500x600")
+window.geometry("500x600")   # width x height in pixels
+
+# A row along the bottom of the window to hold the buttons.
+# side="bottom" keeps the buttons visible even if the window is made smaller.
+# The main window uses pack() (stacks things), and the Add door window uses
+# grid() (rows and columns). Never use both in the same window, or it freezes.
 button_frame = tk.Frame(window)
 button_frame.pack(side="bottom", fill="x", padx=10, pady=(0, 10))
 tk.Button(button_frame, text="Add Door", command=open_add_door).pack(side="left")
+
+# A Treeview is a table where rows can have rows inside them, like folders.
+# Column "#0" is the built-in first column (door or device name).
+# columns=("status",) adds one more column, called "status".
 tree = ttk.Treeview(window, columns=("status",))
 tree.heading("#0", text="Door / Device")
 tree.heading("status", text="Status")
 tree.column("status", width=80, anchor="center")
-
+# fill="both" + expand=True make the table grow when the window is resized.
 tree.pack(fill="both", expand=True, padx=10, pady=10)
 
+# Rows tagged "C" show in green, "P" in yellow, "R" in red.
 for status, color in STATUS_COLORS.items():
     tree.tag_configure(status, foreground=color)
 
-
+# Fill the table with the loaded doors.
 refresh_tree()
 
+# Start the GUI. This keeps the window open and waits for clicks.
+# Any code below this line only runs after the window is closed.
 window.mainloop()
