@@ -16,13 +16,18 @@ class Door:
             devices = {}
         self.devices = devices
 
-    #function to find the a doors overall status based on compeltion of its devices
+    # Work out the door's overall status from its devices.
+    #   No devices            -> P (nothing installed yet)
+    #   Any device is R       -> R (R wins, even if other devices are P)
+    #   All devices C or N    -> C (N devices are ignored)
+    #   Anything else         -> P
+    # It's recalculated every time it's called, so it's never out of date.
     def status(self):
         statuses = self.devices.values()
         if len(self.devices) == 0:
             return "P"
         if "R" in statuses:
-            return "R" 
+            return "R"
 
         for s in statuses:
             if s != "C" and s != "N":
@@ -30,11 +35,22 @@ class Door:
 
         return "C"
 
-    # turn door to dicitonary so it cna be saved as json
+    # Look for a device on this door, ignoring upper/lowercase and extra spaces.
+    # Returns the device name exactly as it's saved (for example "Card Reader"
+    # when the user typed "card reader"), or None if the door doesn't have it.
+    # Use the returned name to read or change the device: door.devices[name]
+    def find_device(self, name):
+        for device_name in self.devices:
+            if device_name.lower() == name.strip().lower():
+                return device_name
+        return None
+
+    # Turn this door into a dictionary so it can be saved as JSON.
     def to_dict(self):
         return {"name": self.name, "devices": self.devices}
 
-    # creat door from dicitonary
+    # The opposite of to_dict(): build a Door from a saved dictionary.
+    # @staticmethod means you call it on the class itself: Door.from_dict(data)
     @staticmethod
     def from_dict(data):
         return Door(data["name"], data["devices"])
