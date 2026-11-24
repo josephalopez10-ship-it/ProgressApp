@@ -11,6 +11,11 @@
 # it: from door import Door, VALID_STATUSES
 VALID_STATUSES = ["C", "P", "R", "N"]
 
+# What each letter means, written out in full. The letters are what gets
+# saved; these words are only for showing to people (the app's table and
+# the reports): from door import STATUS_NAMES
+STATUS_NAMES = {"C": "Complete", "P": "Pending", "R": "Restrained", "N": "N/a"}
+
 
 class Door:
     # __init__ runs when a new Door is created, for example:

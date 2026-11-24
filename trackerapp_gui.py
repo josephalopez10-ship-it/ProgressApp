@@ -25,8 +25,9 @@ from tkinter import messagebox
 from tkinter import filedialog
 # date gives today's date, used in the report's file name.
 from datetime import date
-# The Door class, to create new doors, and the list of allowed status letters.
-from door import Door, VALID_STATUSES
+# The Door class, to create new doors, the list of allowed status letters,
+# and STATUS_NAMES, which turns a letter into a word ("C" -> "Complete").
+from door import Door, VALID_STATUSES, STATUS_NAMES
 # The Project class, to make a project when there are none yet.
 from project import Project
 # Our own report.py, which builds the text report.
@@ -69,15 +70,19 @@ def refresh_tree():
         status = door.status()
         # Add the door as a top-level row. "" means it has no parent row,
         # and "end" puts it at the bottom of the table.
-        # values=(status,) fills the Status column. The comma makes it a
-        # tuple (a list that can't change), which Treeview expects.
-        # tags=(status,) lets us color the row by its status (see the bottom).
+        # values=(...) fills the Status column with the status as a word,
+        # like "Complete", which is easier to read than "C". The comma makes
+        # it a tuple (a list that can't change), which Treeview expects.
+        # tags=(status,) keeps the LETTER, which is used to color the row by
+        # its status (see apply_theme()).
         # open=True shows the door's devices without having to click the arrow.
-        door_row = tree.insert("", "end", text=door.name, values=(status,), tags=(status,), open=True)
+        door_row = tree.insert("", "end", text=door.name, values=(STATUS_NAMES[status],),
+                               tags=(status,), open=True)
 
         # Add each device as a row underneath its door (door_row is the parent).
         for device_name, device_status in door.devices.items():
-            tree.insert(door_row, "end", text=device_name, values=(device_status,), tags=(device_status,))
+            tree.insert(door_row, "end", text=device_name, values=(STATUS_NAMES[device_status],),
+                        tags=(device_status,))
 
     # Update the totals at the top to match the table.
     refresh_summary()
@@ -243,7 +248,8 @@ def open_add_door():
 
         # Show the device in the list, then empty the box ready for the next one.
         # .delete(0, "end") deletes from the first character (0) to the last.
-        device_listbox.insert("end", f"{device_name}   {device_status}")
+        # STATUS_NAMES shows the status as a word, like "Pending".
+        device_listbox.insert("end", f"{device_name}   {STATUS_NAMES[device_status]}")
         device_entry.delete(0, "end")
 
     # --- Row 2: Add Device button ---
@@ -334,7 +340,8 @@ def open_edit_door():
         device_listbox.delete(0, "end")
         device_names.clear()
         for device_name, device_status in door.devices.items():
-            device_listbox.insert("end", f"{device_name}   {device_status}")
+            # STATUS_NAMES shows the status as a word, like "Pending".
+            device_listbox.insert("end", f"{device_name}   {STATUS_NAMES[device_status]}")
             device_names.append(device_name)
 
     # Return the name of the device clicked in the listbox.
@@ -843,7 +850,8 @@ theme_button.pack(side="right", anchor="n")
 tree = ttk.Treeview(window, columns=("status",))
 tree.heading("#0", text="Door / Device")
 tree.heading("status", text="Status")
-tree.column("status", width=80, anchor="center")
+# width=100 leaves room for the longest word, "Restrained".
+tree.column("status", width=100, anchor="center")
 # fill="both" + expand=True make the table grow when the window is resized.
 tree.pack(fill="both", expand=True, padx=10, pady=10)
 

@@ -322,13 +322,15 @@ class GuiTestBase(UsesTempSaveFile):
         super().tearDown()
 
     # Helper: list every row in the main table as (name, status, [devices]).
+    # The table SHOWS words ("Complete"), but each row's tag keeps the
+    # letter ("C"), so the tests can keep comparing short letters.
     def table_rows(self):
         tree = self.gui["tree"]
         rows = []
         for door_row in tree.get_children():
-            devices = [tree.item(row, "text") + "=" + tree.item(row, "values")[0]
+            devices = [tree.item(row, "text") + "=" + tree.item(row, "tags")[0]
                        for row in tree.get_children(door_row)]
-            rows.append((tree.item(door_row, "text"), tree.item(door_row, "values")[0], devices))
+            rows.append((tree.item(door_row, "text"), tree.item(door_row, "tags")[0], devices))
         return rows
 
     # Helper: read the save file back as a list of dictionaries.
@@ -372,6 +374,13 @@ class TestGuiAddDoor(GuiTestBase):
 
     def test_table_shows_saved_doors(self):
         self.assertEqual(self.table_rows(), [("Joes Door", "P", ["Lock=P"])])
+
+    def test_table_shows_status_as_words(self):
+        tree = self.gui["tree"]
+        door_row = tree.get_children()[0]
+        device_row = tree.get_children(door_row)[0]
+        self.assertEqual(tree.item(door_row, "values")[0], "Pending")
+        self.assertEqual(tree.item(device_row, "values")[0], "Pending")
 
     def test_add_door_with_devices(self):
         add_window, name_entry, device_entry, status_box, buttons = self.open_add_window()
@@ -1307,7 +1316,7 @@ class TestGuiShortcuts(GuiTestBase):
         device_entry.insert(0, "Lock")
         self.press(device_entry, "<Return>")
         listbox = [w for w in add_window.winfo_children() if isinstance(w, tk.Listbox)][0]
-        self.assertEqual(listbox.get(0, "end"), ("Lock   P",))
+        self.assertEqual(listbox.get(0, "end"), ("Lock   Pending",))
         # The device box is emptied, ready for the next device.
         self.assertEqual(device_entry.get(), "")
 

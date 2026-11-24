@@ -47,8 +47,9 @@ from reportlab.lib.styles import getSampleStyleSheet
 # "flowables") stacked top to bottom: a title, some text, a table...
 from reportlab.platypus import SimpleDocTemplate, Paragraph, Spacer, Table, TableStyle
 
-# What each status letter means, written out in full for the report.
-STATUS_NAMES = {"C": "Complete", "P": "Pending", "R": "Restrained", "N": "N/a"}
+# What each status letter means, written out in full ("C" -> "Complete").
+# It lives in door.py, so the app's table and the reports use the same words.
+from door import STATUS_NAMES
 
 # The PDF's text color for each status, the same colors as the app.
 STATUS_COLORS = {
