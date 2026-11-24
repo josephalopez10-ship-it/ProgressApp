@@ -396,6 +396,23 @@ class TestGuiAddDoor(GuiTestBase):
         self.assertEqual(tree.set(door_row, "status"), "Pending")
         self.assertEqual(tree.set(device_row, "status"), "Pending")
 
+    def test_door_rows_are_marked_as_doors(self):
+        tree = self.app.tree
+        door_row = tree.get_children()[0]
+        device_row = tree.get_children(door_row)[0]
+        self.assertIn("door", tree.item(door_row, "tags"))
+        self.assertNotIn("door", tree.item(device_row, "tags"))
+
+    def test_door_rows_are_bold_and_shaded(self):
+        tree = self.app.tree
+        self.assertEqual(self.app.door_font.cget("weight"), "bold")
+        self.assertEqual(str(tree.tag_configure("door", "background")),
+                         trackerapp_gui.DOOR_ROW_COLORS["light"])
+        # Dark mode has its own shade.
+        self.app.toggle_theme()
+        self.assertEqual(str(tree.tag_configure("door", "background")),
+                         trackerapp_gui.DOOR_ROW_COLORS["dark"])
+
     def test_devices_column_counts_complete_devices(self):
         tree = self.app.tree
         door_row = tree.get_children()[0]

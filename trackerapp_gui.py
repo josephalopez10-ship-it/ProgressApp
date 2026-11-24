@@ -20,6 +20,8 @@
 
 # tkinter is Python's built-in GUI library. "tk" is a short nickname for it.
 import tkinter as tk
+# tkinter.font makes fonts, like the bold one used for door rows.
+from tkinter import font
 # ttk has nicer-looking versions of tkinter's widgets, like the Treeview table
 # and the Combobox dropdown.
 from tkinter import ttk
@@ -76,6 +78,11 @@ STATUS_COLORS = {
         "R": "#ef5350",   # bright red
     },
 }
+
+# The background shade behind each DOOR row in the table, so doors stand
+# out from the device rows under them, like a heading. A soft blue-gray in
+# light mode, a slightly lighter gray in dark mode.
+DOOR_ROW_COLORS = {"light": "#e6ecf3", "dark": "#2c3139"}
 
 # The choices in the "Show:" dropdown above the table, and the door status
 # letter each one keeps. None means "don't filter by status".
@@ -543,11 +550,13 @@ class TrackerApp:
             # values=(...) fills the extra columns, in the same order they
             # were made in build_table(): Devices, then Status. Status is
             # shown as a word, like "Complete", which is easier to read.
-            # tags=(status,) keeps the LETTER, which is used to color the row
-            # by its status (see apply_theme()).
+            # tags=(status, "door") gives the row two tags. The status LETTER
+            # colors the text by its status, and "door" makes it bold with a
+            # shaded background, so it stands out from its devices. (See
+            # apply_theme() for both.) A device row only gets its status tag.
             # open=True shows the door's devices without clicking the arrow.
             door_row = self.tree.insert("", "end", text=door.name, values=(devices_text, STATUS_NAMES[status]),
-                                        tags=(status,), open=True)
+                                        tags=(status, "door"), open=True)
 
             # Add each device as a row underneath its door (door_row is the
             # parent). A device row leaves the Devices column empty ("").
@@ -1310,6 +1319,17 @@ class TrackerApp:
         # Each mode has its own status colors (see STATUS_COLORS at the top).
         for status, color in STATUS_COLORS[theme].items():
             self.tree.tag_configure(status, foreground=color)
+
+        # Door rows: bold text on a shaded background, so each door reads
+        # like a heading over its devices.
+        # The bold font is a copy of the table's own font with weight="bold".
+        # lookup() asks the theme which font the table uses (set_theme() can
+        # change it, which is why this is done here, after set_theme()).
+        table_font = ttk.Style().lookup("Treeview", "font") or "TkDefaultFont"
+        # It's kept on self so it isn't thrown away while the table uses it.
+        self.door_font = font.Font(font=table_font)
+        self.door_font.configure(weight="bold")
+        self.tree.tag_configure("door", font=self.door_font, background=DOOR_ROW_COLORS[theme])
         # Tick or untick "Dark Mode" in the View menu to match.
         self.dark_mode_on.set(theme == "dark")
 
