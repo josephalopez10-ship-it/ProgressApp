@@ -555,6 +555,113 @@ def project_chosen(event):
         show_project(storage.project_list[position])
 
 
+# Open the project window, used for both New and Edit.
+#   project=None (the default) -> a New project: the boxes start empty.
+#   project=<a Project>        -> Edit that project: the boxes start filled in.
+# The form is the same either way, so one function handles both.
+def open_project_window(project=None):
+    project_window = tk.Toplevel(window)
+    if project is None:
+        project_window.title("New project")
+    else:
+        project_window.title(f"Edit project - {project.name}")
+    # Same three lines as the other pop-up windows: stay in front of the main
+    # window, wait until it's on screen, then block clicks on the main window.
+    project_window.transient(window)
+    project_window.wait_visibility()
+    project_window.grab_set()
+
+    # The four boxes, one per row. Each row is a label on the left and a box
+    # on the right. This list pairs each label with the Project attribute it
+    # fills in, so the rows can be built with one loop instead of four copies.
+    fields = [
+        ("Project name:", "name"),
+        ("Job number:", "job_number"),
+        ("Address / site:", "address"),
+        ("Customer / GC:", "customer"),
+    ]
+    # Remembers each box by its attribute name, so save_project() can read
+    # them: entries["name"], entries["job_number"], and so on.
+    entries = {}
+    # enumerate() gives each item's position (0, 1, 2, 3) along with the item,
+    # which is used as the row number.
+    for row, (label_text, attribute) in enumerate(fields):
+        tk.Label(project_window, text=label_text).grid(row=row, column=0, sticky="w", padx=10, pady=5)
+        entry = tk.Entry(project_window, width=35)
+        entry.grid(row=row, column=1, columnspan=2, sticky="w", padx=10, pady=5)
+        # When editing, fill the box with the project's current value.
+        # getattr(project, "job_number") is the same as project.job_number;
+        # it's used here because the attribute name is in a variable.
+        if project is not None:
+            entry.insert(0, getattr(project, attribute))
+        entries[attribute] = entry
+
+    # Runs when Save is clicked.
+    def save_project():
+        name = entries["name"].get().strip()
+        if name == "":
+            messagebox.showerror("Missing name", "Project name cannot be blank.", parent=project_window)
+            return
+        # Block the name if a DIFFERENT project already uses it. "is not
+        # project" still lets you fix the capitals on this project's own name.
+        other_project = storage.find_project(name)
+        if other_project is not None and other_project is not project:
+            messagebox.showerror("Duplicate project", f"{name} already exists.", parent=project_window)
+            return
+
+        if project is None:
+            # New: make the project and add it to the list.
+            saved_project = Project(name)
+            storage.project_list.append(saved_project)
+        else:
+            # Edit: change the existing project.
+            saved_project = project
+            saved_project.name = name
+
+        # Copy the other three boxes into the project. setattr() is the
+        # opposite of getattr(): setattr(p, "address", "12 Main St") is the
+        # same as p.address = "12 Main St".
+        for attribute in ["job_number", "address", "customer"]:
+            setattr(saved_project, attribute, entries[attribute].get().strip())
+
+        storage.save_projects()
+        # Switch to the new or edited project. This also updates the title and
+        # the dropdown, so a new name shows up straight away.
+        show_project(saved_project)
+        project_window.destroy()
+
+    tk.Button(project_window, text="Save", command=save_project).grid(row=4, column=1, sticky="e", pady=10)
+    tk.Button(project_window, text="Cancel", command=project_window.destroy).grid(row=4, column=2, padx=10, pady=10)
+
+
+# Runs when the New button next to the dropdown is clicked.
+def new_project():
+    open_project_window()
+
+
+# Runs when the Edit button next to the dropdown is clicked.
+def edit_project():
+    open_project_window(current_project)
+
+
+# Runs when the Delete button next to the dropdown is clicked.
+# Deletes the current project and all of its doors, after asking first.
+def delete_project():
+    # Always keep at least one project, so there's somewhere to add doors.
+    if len(storage.project_list) == 1:
+        messagebox.showerror("Can't delete", "This is your only project. Make a new project first, then delete this one.")
+        return
+
+    door_count = len(current_project.doors)
+    if messagebox.askyesno("Delete project",
+                           f"Delete the project {current_project.name} and all {door_count} of its doors?\nThis can't be undone.",
+                           icon="warning", parent=window):
+        storage.project_list.remove(current_project)
+        storage.save_projects()
+        # The current project is gone, so switch to the first one left.
+        show_project(storage.project_list[0])
+
+
 ##########################################################################
 # Build the main window. Everything below runs once, when the app starts.
 ##########################################################################
@@ -574,7 +681,7 @@ if len(storage.project_list) == 0:
 # Create the main window.
 window = tk.Tk()
 window.title("TrackerApp")
-window.geometry("500x600")   # width x height in pixels
+window.geometry("560x600")   # width x height in pixels (wide enough for the project row)
 
 # A row along the bottom of the window to hold the buttons.
 # side="bottom" keeps the buttons visible even if the window is made smaller.
@@ -613,8 +720,12 @@ project_frame = tk.Frame(window)
 project_frame.pack(side="top", fill="x", padx=10, pady=(10, 0))
 tk.Label(project_frame, text="Project:").pack(side="left")
 # state="readonly" means you can only pick a project, not type in the box.
-project_box = ttk.Combobox(project_frame, state="readonly", width=35)
+project_box = ttk.Combobox(project_frame, state="readonly", width=25)
 project_box.pack(side="left", padx=(5, 0))
+# New / Edit / Delete project buttons, to the right of the dropdown.
+tk.Button(project_frame, text="New", command=new_project).pack(side="left", padx=(10, 0))
+tk.Button(project_frame, text="Edit", command=edit_project).pack(side="left", padx=(5, 0))
+tk.Button(project_frame, text="Delete", command=delete_project).pack(side="left", padx=(5, 0))
 # "<<ComboboxSelected>>" is the event tkinter sends when a choice is picked.
 project_box.bind("<<ComboboxSelected>>", project_chosen)
 

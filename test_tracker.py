@@ -943,6 +943,131 @@ class TestGuiProjects(GuiTestBase):
         self.assertEqual(saved[0]["job_number"], "24-117")
 
 
+# ---------------------------------------------------------------------------
+# New / Edit / Delete project
+# ---------------------------------------------------------------------------
+class TestGuiProjectButtons(GuiTestBase):
+
+    SAVED_PROJECTS = [
+        {"name": "Westfield Mall", "job_number": "24-117", "address": "1200 Main St",
+         "customer": "Acme Builders",
+         "doors": [{"name": "Main Entrance", "devices": {"Lock": "C"}}]},
+        {"name": "City Hospital", "doors": []},
+    ]
+
+    # Helper: open the project window (New or Edit) and find its boxes and
+    # buttons. The four boxes come back in order: name, job number, address,
+    # customer.
+    def open_project_window(self, button_function):
+        self.gui[button_function]()
+        project_window = self.newest_window()
+        widgets = project_window.winfo_children()
+        entries = [w for w in widgets if type(w) is tk.Entry]
+        buttons = {w.cget("text"): w for w in widgets if isinstance(w, tk.Button)}
+        return project_window, entries, buttons
+
+    # Helper: replace the text in a box.
+    def type_into(self, entry, text):
+        entry.delete(0, "end")
+        entry.insert(0, text)
+
+    def test_new_project(self):
+        project_window, entries, buttons = self.open_project_window("new_project")
+        # A new project's boxes start empty.
+        self.assertEqual([e.get() for e in entries], ["", "", "", ""])
+        self.type_into(entries[0], "Airport Terminal B")
+        self.type_into(entries[1], "25-004")
+        self.type_into(entries[3], "Skyline GC")
+        buttons["Save"].invoke()
+
+        self.assertEqual(self.errors, [])
+        self.assertFalse(project_window.winfo_exists())
+        # Added at the end, saved, and switched to.
+        new = storage.project_list[-1]
+        self.assertEqual((new.name, new.job_number, new.address, new.customer, new.doors),
+                         ("Airport Terminal B", "25-004", "", "Skyline GC", []))
+        self.assertIs(self.gui["current_project"], new)
+        self.assertEqual(self.gui["project_box"].get(), "Airport Terminal B")
+        self.assertEqual(self.table_rows(), [])
+        saved = json.loads(storage.PROJECTS_FILE.read_text(encoding="utf-8"))
+        self.assertEqual(saved[-1]["job_number"], "25-004")
+
+    def test_new_project_blank_name_is_blocked(self):
+        project_window, entries, buttons = self.open_project_window("new_project")
+        buttons["Save"].invoke()
+        self.assertEqual(self.errors, ["Project name cannot be blank."])
+        self.assertEqual(len(storage.project_list), 2)
+        self.assertTrue(project_window.winfo_exists())
+
+    def test_new_project_duplicate_name_is_blocked(self):
+        project_window, entries, buttons = self.open_project_window("new_project")
+        self.type_into(entries[0], "city HOSPITAL")
+        buttons["Save"].invoke()
+        self.assertEqual(self.errors, ["city HOSPITAL already exists."])
+        self.assertEqual(len(storage.project_list), 2)
+
+    def test_new_project_cancel_adds_nothing(self):
+        project_window, entries, buttons = self.open_project_window("new_project")
+        self.type_into(entries[0], "Never Saved")
+        buttons["Cancel"].invoke()
+        self.assertEqual(len(storage.project_list), 2)
+        self.assertFalse(project_window.winfo_exists())
+
+    def test_edit_starts_filled_in(self):
+        project_window, entries, buttons = self.open_project_window("edit_project")
+        self.assertEqual([e.get() for e in entries],
+                         ["Westfield Mall", "24-117", "1200 Main St", "Acme Builders"])
+        self.assertEqual(project_window.title(), "Edit project - Westfield Mall")
+
+    def test_edit_project_details(self):
+        project_window, entries, buttons = self.open_project_window("edit_project")
+        self.type_into(entries[0], "Westfield Mall Phase 2")
+        self.type_into(entries[2], "1300 Main St")
+        buttons["Save"].invoke()
+
+        self.assertEqual(self.errors, [])
+        mall = storage.project_list[0]
+        self.assertEqual((mall.name, mall.job_number, mall.address), ("Westfield Mall Phase 2", "24-117", "1300 Main St"))
+        # The doors are still there, the title and dropdown show the new name.
+        self.assertEqual([d.name for d in mall.doors], ["Main Entrance"])
+        self.assertEqual(self.gui["window"].title(), "TrackerApp - Westfield Mall Phase 2")
+        self.assertEqual(list(self.gui["project_box"].cget("values")), ["Westfield Mall Phase 2", "City Hospital"])
+
+    def test_edit_to_another_projects_name_is_blocked(self):
+        project_window, entries, buttons = self.open_project_window("edit_project")
+        self.type_into(entries[0], "City Hospital")
+        buttons["Save"].invoke()
+        self.assertEqual(self.errors, ["City Hospital already exists."])
+        self.assertEqual(storage.project_list[0].name, "Westfield Mall")
+
+    def test_edit_can_fix_own_capitals(self):
+        project_window, entries, buttons = self.open_project_window("edit_project")
+        self.type_into(entries[0], "WESTFIELD MALL")
+        buttons["Save"].invoke()
+        self.assertEqual(self.errors, [])
+        self.assertEqual(storage.project_list[0].name, "WESTFIELD MALL")
+
+    def test_delete_project_no_keeps_it(self):
+        self.answer_yes = False
+        self.gui["delete_project"]()
+        self.assertEqual(len(storage.project_list), 2)
+
+    def test_delete_project_yes(self):
+        self.gui["delete_project"]()
+        self.assertEqual([p.name for p in storage.project_list], ["City Hospital"])
+        # Switched to the project that's left, and saved.
+        self.assertEqual(self.gui["project_box"].get(), "City Hospital")
+        saved = json.loads(storage.PROJECTS_FILE.read_text(encoding="utf-8"))
+        self.assertEqual([p["name"] for p in saved], ["City Hospital"])
+
+    def test_cannot_delete_only_project(self):
+        self.gui["delete_project"]()      # deletes Westfield Mall
+        self.gui["delete_project"]()      # City Hospital is the only one left
+        self.assertEqual(len(self.errors), 1)
+        self.assertTrue(self.errors[0].startswith("This is your only project."))
+        self.assertEqual([p.name for p in storage.project_list], ["City Hospital"])
+
+
 class TestGuiNoProjects(GuiTestBase):
 
     # An empty projects.json: no projects at all.
