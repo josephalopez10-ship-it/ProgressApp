@@ -53,6 +53,15 @@ STATUS_COLORS = {
     },
 }
 
+# The choices in the "Show:" dropdown above the table, and the door status
+# letter each one keeps. None means "don't filter by status".
+FILTER_CHOICES = {
+    "All doors": None,
+    "Complete": "C",
+    "Pending": "P",
+    "Restrained": "R",
+}
+
 # The project picked in the dropdown at the top. Every function that works
 # on doors uses current_project.doors. It's set when the app starts, and
 # changed by show_project() when another project is picked.
@@ -66,7 +75,16 @@ def refresh_tree():
     for row in tree.get_children():
         tree.delete(row)
 
+    # Count the doors that pass the search and filter, for the "Showing"
+    # message under the search box.
+    shown = 0
     for door in current_project.doors:
+        # Skip doors that don't match what's typed in the search box or
+        # picked in the Show dropdown. continue jumps to the next door.
+        if not door_matches(door):
+            continue
+        shown += 1
+
         status = door.status()
         # Add the door as a top-level row. "" means it has no parent row,
         # and "end" puts it at the bottom of the table.
@@ -96,8 +114,50 @@ def refresh_tree():
             tree.insert(door_row, "end", text=device_name, values=("", STATUS_NAMES[device_status]),
                         tags=(device_status,))
 
-    # Update the totals at the top to match the table.
+    # Tell the user when some doors are hidden, so an empty-looking table
+    # isn't mistaken for missing doors. With no search or filter, it's blank.
+    total = len(current_project.doors)
+    if shown == total:
+        filter_label.config(text="")
+    else:
+        filter_label.config(text=f"Showing {shown} of {total} doors")
+
+    # Update the totals at the top. They always count the WHOLE project,
+    # even when the search hides some doors.
     refresh_summary()
+
+
+# Check one door against the search box and the Show dropdown.
+# Returns True if the door should be shown in the table, False to hide it.
+def door_matches(door):
+    # --- The Show dropdown ---
+    # Look up the letter for the picked choice ("Pending" -> "P").
+    wanted_status = FILTER_CHOICES[status_filter.get()]
+    if wanted_status is not None and door.status() != wanted_status:
+        return False
+
+    # --- The search box ---
+    # .lower() on both sides so "lobby" finds "Lobby".
+    search = search_text.get().strip().lower()
+    if search == "":
+        return True
+    # "in" checks if one piece of text is inside another:
+    # "lob" in "main lobby" is True.
+    if search in door.name.lower():
+        return True
+    # Also show the door if one of its devices matches, so searching
+    # "restraint" finds every door that has a restraint.
+    for device_name in door.devices:
+        if search in device_name.lower():
+            return True
+    return False
+
+
+# Runs when the search text or the Show dropdown changes: redraw the table.
+# The "*args" catches the extra details tkinter sends along (which variable
+# changed, and how). We don't need them, but the function has to accept them.
+def filter_changed(*args):
+    refresh_tree()
 
 
 # Count the doors and devices, and show the totals in the summary at the top.
@@ -625,6 +685,10 @@ def show_project(project):
     current_project = project
     window.title(f"TrackerApp - {project.name}")
     refresh_project_choices()
+    # Clear the search and filter, so the new project starts with every door
+    # showing. (Each .set() also redraws the table, through filter_changed.)
+    search_text.set("")
+    status_filter.set("All doors")
     # refresh_tree() also updates the summary, so both now show this project.
     refresh_tree()
 
@@ -872,6 +936,37 @@ theme_button.pack(side="right", anchor="n")
 progress_bar = ttk.Progressbar(window, maximum=100)
 progress_bar.pack(side="top", fill="x", padx=10, pady=(8, 0))
 
+# The search row above the table: a search box and a "Show:" dropdown.
+# Typing or picking a choice hides the doors that don't match, straight away.
+search_frame = ttk.Frame(window)
+search_frame.pack(side="top", fill="x", padx=10, pady=(10, 0))
+
+# A StringVar is a tkinter variable that a widget is connected to. Whatever
+# is typed in the box is always in search_text, and search_text.get() reads it.
+# trace_add("write", ...) runs filter_changed every time it changes, which
+# is what makes the table update while you type.
+search_text = tk.StringVar()
+search_text.trace_add("write", filter_changed)
+ttk.Label(search_frame, text="Search:").pack(side="left")
+search_entry = ttk.Entry(search_frame, textvariable=search_text, width=25)
+search_entry.pack(side="left", padx=(5, 0))
+# Escape in the search box clears it.
+search_entry.bind("<Escape>", lambda event: search_text.set(""))
+
+# The "Show:" dropdown, connected to its own StringVar the same way.
+# list(FILTER_CHOICES) gives just the names: "All doors", "Complete", ...
+status_filter = tk.StringVar(value="All doors")
+status_filter.trace_add("write", filter_changed)
+status_filter_box = ttk.Combobox(search_frame, textvariable=status_filter, values=list(FILTER_CHOICES),
+                                 state="readonly", width=12)
+status_filter_box.pack(side="right")
+ttk.Label(search_frame, text="Show:").pack(side="right", padx=(0, 5))
+
+# "Showing 3 of 12 doors", under the search row. refresh_tree() fills it in,
+# and leaves it blank when every door is showing.
+filter_label = ttk.Label(window, text="")
+filter_label.pack(side="top", anchor="w", padx=10)
+
 # A Treeview is a table where rows can have rows inside them, like folders.
 # Column "#0" is the built-in first column (door or device name).
 # columns=("devices", "status") adds two more columns. refresh_tree()
@@ -895,12 +990,15 @@ tree.bind("<Double-1>", row_double_clicked)
 #   Enter   -> edit the selected door (like double-clicking it)
 #   Delete  -> delete the selected door (it still asks "are you sure?")
 #   Ctrl+N  -> add a new door
+#   Ctrl+F  -> jump to the search box
 # Enter and Delete are bound to the table, so they only work when the table
 # has the focus (after clicking a row). Ctrl+N is bound to the whole main
 # window. Pop-ups are separate windows, so it doesn't fire while typing in one.
 tree.bind("<Return>", lambda event: open_edit_door())
 tree.bind("<Delete>", lambda event: remove_selected_door())
 window.bind("<Control-n>", lambda event: open_add_door())
+# Ctrl+F jumps to the search box (F for Find), like in most programs.
+window.bind("<Control-f>", lambda event: search_entry.focus_set())
 
 # Turn on the theme the user picked last time (light the very first time).
 # This also colors the status rows: "C" green, "P" yellow, "R" red.

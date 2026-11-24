@@ -1300,6 +1300,81 @@ class TestGuiNoProjects(GuiTestBase):
 
 
 # ---------------------------------------------------------------------------
+# The search box and "Show:" filter above the table
+# ---------------------------------------------------------------------------
+class TestGuiSearch(GuiTestBase):
+
+    SAVED_DOORS = [
+        {"name": "Main Lobby", "devices": {"Lock": "C", "REX": "C"}},         # C
+        {"name": "Loading Dock", "devices": {"Restraint": "R"}},              # R
+        {"name": "Stair 2", "devices": {"Card Reader": "P", "Lock": "C"}},    # P
+    ]
+
+    # Helper: the door names showing in the table, top to bottom.
+    def shown(self):
+        tree = self.gui["tree"]
+        return [tree.item(row, "text") for row in tree.get_children()]
+
+    def filter_text(self):
+        return self.gui["filter_label"].cget("text")
+
+    def test_everything_shows_at_start(self):
+        self.assertEqual(self.shown(), ["Main Lobby", "Loading Dock", "Stair 2"])
+        self.assertEqual(self.filter_text(), "")
+
+    def test_search_by_door_name_ignores_case(self):
+        self.gui["search_text"].set("LOBBY")
+        self.assertEqual(self.shown(), ["Main Lobby"])
+        self.assertEqual(self.filter_text(), "Showing 1 of 3 doors")
+
+    def test_search_finds_doors_by_device(self):
+        self.gui["search_text"].set("restraint")
+        self.assertEqual(self.shown(), ["Loading Dock"])
+
+    def test_show_dropdown_filters_by_status(self):
+        self.gui["status_filter"].set("Pending")
+        self.assertEqual(self.shown(), ["Stair 2"])
+
+    def test_search_and_filter_together(self):
+        # Two doors have a Lock, but only Main Lobby is complete.
+        self.gui["search_text"].set("lock")
+        self.gui["status_filter"].set("Complete")
+        self.assertEqual(self.shown(), ["Main Lobby"])
+
+    def test_no_matches_shows_zero(self):
+        self.gui["search_text"].set("nothing like this")
+        self.assertEqual(self.shown(), [])
+        self.assertEqual(self.filter_text(), "Showing 0 of 3 doors")
+
+    def test_summary_still_counts_whole_project(self):
+        before = self.gui["summary_label"].cget("text")
+        self.gui["search_text"].set("lobby")
+        self.assertEqual(self.gui["summary_label"].cget("text"), before)
+
+    def test_typing_in_search_box_filters(self):
+        # Type into the real box, to check it's connected to search_text.
+        self.gui["search_entry"].insert(0, "stair")
+        self.assertEqual(self.shown(), ["Stair 2"])
+
+    def test_escape_clears_search(self):
+        entry = self.gui["search_entry"]
+        entry.insert(0, "stair")
+        entry.focus_force()
+        entry.update()
+        entry.event_generate("<Escape>")
+        self.assertEqual(self.gui["search_text"].get(), "")
+        self.assertEqual(len(self.shown()), 3)
+
+    def test_switching_project_clears_search(self):
+        self.gui["search_text"].set("lobby")
+        self.gui["status_filter"].set("Complete")
+        self.gui["show_project"](self.gui["current_project"])
+        self.assertEqual(self.gui["search_text"].get(), "")
+        self.assertEqual(self.gui["status_filter"].get(), "All doors")
+        self.assertEqual(len(self.shown()), 3)
+
+
+# ---------------------------------------------------------------------------
 # Keyboard shortcuts (Enter, Escape, Delete, Ctrl+N)
 # ---------------------------------------------------------------------------
 class TestGuiShortcuts(GuiTestBase):
@@ -1384,6 +1459,10 @@ class TestGuiShortcuts(GuiTestBase):
     def test_ctrl_n_opens_add_door_window(self):
         self.press(self.gui["tree"], "<Control-n>")
         self.assertEqual(self.newest_window().title(), "Add Door")
+
+    def test_ctrl_f_jumps_to_search_box(self):
+        self.press(self.gui["tree"], "<Control-f>")
+        self.assertEqual(self.gui["window"].focus_get(), self.gui["search_entry"])
 
     def test_enter_on_table_opens_edit_window(self):
         tree = self.select_joes_door()
