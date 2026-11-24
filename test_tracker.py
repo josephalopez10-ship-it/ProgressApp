@@ -52,6 +52,13 @@ class TestDoorStatus(unittest.TestCase):
     def test_only_na_is_complete(self):
         self.assertEqual(Door("Test", {"REX": "N"}).status(), "C")
 
+    def test_progress_counts_complete_and_skips_na(self):
+        door = Door("Test", {"Lock": "C", "REX": "P", "Sounder": "N", "Reader": "C"})
+        self.assertEqual(door.progress(), (2, 3))
+
+    def test_progress_with_no_devices(self):
+        self.assertEqual(Door("Test").progress(), (0, 0))
+
     def test_any_pending_is_pending(self):
         self.assertEqual(Door("Test", {"Lock": "C", "REX": "P"}).status(), "P")
 
@@ -379,8 +386,24 @@ class TestGuiAddDoor(GuiTestBase):
         tree = self.gui["tree"]
         door_row = tree.get_children()[0]
         device_row = tree.get_children(door_row)[0]
-        self.assertEqual(tree.item(door_row, "values")[0], "Pending")
-        self.assertEqual(tree.item(device_row, "values")[0], "Pending")
+        # tree.set(row, "status") reads one column of one row.
+        self.assertEqual(tree.set(door_row, "status"), "Pending")
+        self.assertEqual(tree.set(device_row, "status"), "Pending")
+
+    def test_devices_column_counts_complete_devices(self):
+        tree = self.gui["tree"]
+        door_row = tree.get_children()[0]
+        device_row = tree.get_children(door_row)[0]
+        # Joes Door has one device, Lock, which is pending.
+        self.assertEqual(tree.set(door_row, "devices"), "0 / 1")
+        # Device rows leave the Devices column empty.
+        self.assertEqual(tree.set(device_row, "devices"), "")
+
+    def test_devices_column_shows_dash_with_no_devices(self):
+        self.doors().append(Door("Empty Door"))
+        self.gui["refresh_tree"]()
+        tree = self.gui["tree"]
+        self.assertEqual(tree.set(tree.get_children()[1], "devices"), "—")
 
     def test_add_door_with_devices(self):
         add_window, name_entry, device_entry, status_box, buttons = self.open_add_window()
@@ -752,10 +775,15 @@ class TestGuiSummary(GuiTestBase):
                          "4 doors: 1 complete, 2 pending, 1 restrained\n"
                          "Devices: 2 of 5 complete (40%)")
 
+    def test_progress_bar_matches_percent(self):
+        # float() because tkinter may hand the value back as text or a decimal.
+        self.assertEqual(float(self.gui["progress_bar"].cget("value")), 40)
+
     def test_updates_after_a_change(self):
         # Change Busy Door's REX from P to C, then redraw like the app does.
         self.doors()[1].devices["REX"] = "C"
         self.gui["refresh_tree"]()
+        self.assertEqual(float(self.gui["progress_bar"].cget("value")), 60)
         self.assertEqual(self.summary(),
                          "4 doors: 2 complete, 1 pending, 1 restrained\n"
                          "Devices: 3 of 5 complete (60%)")

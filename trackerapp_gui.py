@@ -70,18 +70,30 @@ def refresh_tree():
         status = door.status()
         # Add the door as a top-level row. "" means it has no parent row,
         # and "end" puts it at the bottom of the table.
-        # values=(...) fills the Status column with the status as a word,
-        # like "Complete", which is easier to read than "C". The comma makes
-        # it a tuple (a list that can't change), which Treeview expects.
+        # The Devices column shows how many of the door's devices are done,
+        # like "3 / 4". progress() gives back both numbers at once, and
+        # "done, total = ..." puts them into two variables.
+        done, total = door.progress()
+        if total == 0:
+            # No devices to count yet (or they're all N/a): show a dash
+            # instead of a confusing "0 / 0".
+            devices_text = "—"
+        else:
+            devices_text = f"{done} / {total}"
+
+        # values=(...) fills the extra columns, in the same order they were
+        # made at the bottom of the file: Devices, then Status. Status is
+        # shown as a word, like "Complete", which is easier to read than "C".
         # tags=(status,) keeps the LETTER, which is used to color the row by
         # its status (see apply_theme()).
         # open=True shows the door's devices without having to click the arrow.
-        door_row = tree.insert("", "end", text=door.name, values=(STATUS_NAMES[status],),
+        door_row = tree.insert("", "end", text=door.name, values=(devices_text, STATUS_NAMES[status]),
                                tags=(status,), open=True)
 
         # Add each device as a row underneath its door (door_row is the parent).
+        # A device row leaves the Devices column empty ("").
         for device_name, device_status in door.devices.items():
-            tree.insert(door_row, "end", text=device_name, values=(STATUS_NAMES[device_status],),
+            tree.insert(door_row, "end", text=device_name, values=("", STATUS_NAMES[device_status]),
                         tags=(device_status,))
 
     # Update the totals at the top to match the table.
@@ -99,17 +111,13 @@ def refresh_summary():
         # += 1 adds one to the count for this door's status.
         counts[door.status()] += 1
 
-    # Count devices across every door. N devices are skipped (continue jumps to
-    # the next device), the same way they're ignored for the door status.
+    # Add up every door's devices. progress() already skips N devices.
     devices_total = 0
     devices_done = 0
     for door in current_project.doors:
-        for device_status in door.devices.values():
-            if device_status == "N":
-                continue
-            devices_total += 1
-            if device_status == "C":
-                devices_done += 1
+        done, total = door.progress()
+        devices_done += done
+        devices_total += total
 
     # Work out the percent complete. Dividing by 0 crashes Python, so check
     # for "no devices yet" first. round() turns 77.8 into 78.
@@ -117,6 +125,10 @@ def refresh_summary():
         percent = 0
     else:
         percent = round(devices_done / devices_total * 100)
+
+    # Fill the progress bar to the same percent. It was made with
+    # maximum=100, so value=78 fills it 78% of the way.
+    progress_bar.config(value=percent)
 
     # .config() changes a widget after it was created; here, the label's text.
     # "\n" puts the device totals on a second line.
@@ -852,12 +864,24 @@ theme_button = ttk.Button(summary_frame, command=toggle_theme)
 # anchor="n" keeps it at the top of the row, level with the summary's first line.
 theme_button.pack(side="right", anchor="n")
 
+# A progress bar under the summary that fills up as devices are completed,
+# so you can see how far along the project is at a glance.
+# maximum=100 means a value of 100 is a full bar, so the value is the percent.
+# It's filled in by refresh_summary(). Like the summary, it must be packed
+# before the table, or it would end up under it.
+progress_bar = ttk.Progressbar(window, maximum=100)
+progress_bar.pack(side="top", fill="x", padx=10, pady=(8, 0))
+
 # A Treeview is a table where rows can have rows inside them, like folders.
 # Column "#0" is the built-in first column (door or device name).
-# columns=("status",) adds one more column, called "status".
-tree = ttk.Treeview(window, columns=("status",))
+# columns=("devices", "status") adds two more columns. refresh_tree()
+# fills them in this same order.
+tree = ttk.Treeview(window, columns=("devices", "status"))
 tree.heading("#0", text="Door / Device")
+tree.heading("devices", text="Devices")
 tree.heading("status", text="Status")
+# How many of the door's devices are complete, like "3 / 4".
+tree.column("devices", width=80, anchor="center")
 # width=100 leaves room for the longest word, "Restrained".
 tree.column("status", width=100, anchor="center")
 # fill="both" + expand=True make the table grow when the window is resized.

@@ -48,6 +48,24 @@ class Door:
 
         return "C"
 
+    # Count this door's devices: how many are complete, out of how many.
+    # N devices are skipped (continue jumps to the next device), the same way
+    # they're ignored for the door status.
+    # Returns two numbers at once, as a tuple: (done, total).
+    #   Door("Lobby", {"Lock": "C", "REX": "P", "Sounder": "N"}).progress()
+    #   -> (1, 2)
+    # Used by the app's Devices column and its summary at the top.
+    def progress(self):
+        done = 0
+        total = 0
+        for device_status in self.devices.values():
+            if device_status == "N":
+                continue
+            total += 1
+            if device_status == "C":
+                done += 1
+        return done, total
+
     # Look for a device on this door, ignoring upper/lowercase and extra spaces.
     # Returns the device name exactly as it's saved (for example "Card Reader"
     # when the user typed "card reader"), or None if the door doesn't have it.
