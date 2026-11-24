@@ -125,7 +125,7 @@ def refresh_summary():
 # Find the door that's selected (clicked) in the table.
 # If a device row is selected, use the door it belongs to.
 # Returns the Door object, or None if nothing is selected.
-# Used by Edit Door and Remove Door.
+# Used by the Edit Door button and the main window's Delete Door button.
 def get_selected_door():
     # tree.selection() gives the selected rows. It's empty if nothing is clicked.
     selected = tree.selection()
@@ -158,7 +158,7 @@ def row_double_clicked(event):
     return "break"
 
 
-# Get a new pop-up window (Add door, Edit door, or a project window) ready.
+# Get a new pop-up window (Add Door, Edit Door, or a project window) ready.
 # All three pop-ups need the same steps, so they're written once here.
 def setup_popup(popup):
     # (No colors needed here: sv_ttk colors every window and list to match
@@ -179,7 +179,7 @@ def setup_popup(popup):
 def open_add_door():
     # Toplevel = a second window that opens on top of the main one.
     add_window = tk.Toplevel(window)
-    add_window.title("Add door")
+    add_window.title("Add Door")
     # Theme colors, stay in front, block clicks on the main window.
     setup_popup(add_window)
 
@@ -263,7 +263,7 @@ def open_add_door():
         storage.save_projects()
         # Redraw the main table so the new door shows up.
         refresh_tree()
-        # Close the Add door window.
+        # Close the Add Door window.
         add_window.destroy()
 
     # --- Row 4: Save Door and Cancel buttons ---
@@ -274,7 +274,7 @@ def open_add_door():
     ttk.Button(add_window, text="Cancel", command=add_window.destroy).grid(row=4, column=2, pady=10)
 
 
-# Open the "Edit door" window for the door selected in the table.
+# Open the "Edit Door" window for the door selected in the table.
 # Runs when the Edit Door button is clicked.
 # In this window you can rename the door, change a device's status, delete a
 # device, or add a new one. Every change is saved straight away, so there's
@@ -282,7 +282,7 @@ def open_add_door():
 def open_edit_door():
     door = get_selected_door()
     if door is None:
-        messagebox.showerror("No door selected", "Click a door in the list first")
+        messagebox.showerror("No door selected", "Click a door in the list first.")
         return
 
     edit_window = tk.Toplevel(window)
@@ -399,12 +399,12 @@ def open_edit_door():
             return
 
         # askyesno shows Yes/No buttons and returns True if Yes was clicked.
-        if messagebox.askyesno("Delete device", f"Delete {device_name} from {door.name}?", parent=edit_window):
+        if messagebox.askyesno("Delete Device", f"Delete {device_name} from {door.name}?", parent=edit_window):
             # del removes this device and its status from the dictionary.
             del door.devices[device_name]
             changes_made()
 
-    ttk.Button(edit_window, text="Delete device", command=delete_device).grid(row=3, column=2, padx=10, pady=5)
+    ttk.Button(edit_window, text="Delete Device", command=delete_device).grid(row=3, column=2, padx=10, pady=5)
 
     # --- Rows 4-5: add a new device ---
     # pady=(15, 5) adds 15 pixels of space above this row and 5 below,
@@ -418,7 +418,7 @@ def open_edit_door():
     new_status_box.set("P")
     new_status_box.grid(row=4, column=2, padx=10, pady=(15, 5))
 
-    # Runs when Add device is clicked.
+    # Runs when Add Device is clicked.
     def add_device():
         device_name = new_device_entry.get().strip()
         if device_name == "":
@@ -427,7 +427,7 @@ def open_edit_door():
 
         # find_device ignores upper/lowercase, so "lock" matches "Lock".
         if door.find_device(device_name) is not None:
-            messagebox.showerror("Duplicate device", f"{device_name} is already on this door", parent=edit_window)
+            messagebox.showerror("Duplicate device", f"{device_name} is already on this door.", parent=edit_window)
             return
 
         door.devices[device_name] = new_status_box.get()
@@ -435,7 +435,7 @@ def open_edit_door():
         new_device_entry.delete(0, "end")
         changes_made()
 
-    ttk.Button(edit_window, text="Add device", command=add_device).grid(row=5, column=2, padx=10, pady=5)
+    ttk.Button(edit_window, text="Add Device", command=add_device).grid(row=5, column=2, padx=10, pady=5)
 
     # --- Row 6 (left side): Delete Door button ---
     # Deletes the whole door. If Yes is clicked, the door is gone, so this
@@ -458,14 +458,14 @@ def open_edit_door():
 # Ask "are you sure?", then delete the door if Yes is clicked.
 # parent = the window the pop-up should appear on top of.
 # Returns True if the door was deleted, False if the user clicked No.
-# Used by the Remove Door button and the Delete Door button in the Edit window,
+# Used by the Delete Door button in the main window and the one in the Edit window,
 # so the confirm-and-delete steps are only written once.
 def confirm_and_delete_door(door, parent):
     # Ask first, since a removed door can't be brought back.
     # "\n" starts a new line inside the pop-up message.
     # icon="warning" shows a warning symbol instead of a question mark.
     # The icon name must be lowercase: error, info, question, or warning.
-    if messagebox.askyesno("Remove door", f"Delete {door.name} and all its devices?\nThis can't be undone.",
+    if messagebox.askyesno("Delete Door", f"Delete {door.name} and all its devices?\nThis can't be undone.",
                            icon="warning", parent=parent):
         current_project.doors.remove(door)
         # Save so the door is also gone from projects.json.
@@ -475,11 +475,11 @@ def confirm_and_delete_door(door, parent):
     return False
 
 
-# Remove the door selected in the table. Runs when Remove Door is clicked.
+# Remove the door selected in the table. Runs when the main window's Delete Door button is clicked.
 def remove_selected_door():
     door = get_selected_door()
     if door is None:
-        messagebox.showerror("No door selected", "Click a door in the list first")
+        messagebox.showerror("No door selected", "Click a door in the list first.")
         return
     confirm_and_delete_door(door, window)
 
@@ -594,9 +594,9 @@ def project_chosen(event):
 def open_project_window(project=None):
     project_window = tk.Toplevel(window)
     if project is None:
-        project_window.title("New project")
+        project_window.title("New Project")
     else:
-        project_window.title(f"Edit project - {project.name}")
+        project_window.title(f"Edit Project - {project.name}")
     # Theme colors, stay in front, block clicks on the main window.
     setup_popup(project_window)
 
@@ -743,7 +743,7 @@ window.geometry("560x680")   # width x height in pixels (wide enough for the pro
 
 # A row along the bottom of the window to hold the buttons.
 # side="bottom" keeps the buttons visible even if the window is made smaller.
-# The main window uses pack() (stacks things), and the Add door and Edit door
+# The main window uses pack() (stacks things), and the Add Door and Edit Door
 # windows use grid() (rows and columns). Never use both in the same window,
 # or it freezes.
 button_frame = ttk.Frame(window)
@@ -768,9 +768,9 @@ export_menu.add_command(label="PDF (.pdf)", command=export_pdf)
 export_button.config(menu=export_menu)
 export_button.pack(side="left", padx=(10, 0))
 
-# side="right" puts Remove Door on the far right, away from Add and Edit,
+# side="right" puts Delete Door on the far right, away from Add and Edit,
 # so it's harder to click by accident.
-ttk.Button(button_frame, text="Remove Door", command=remove_selected_door).pack(side="right")
+ttk.Button(button_frame, text="Delete Door", command=remove_selected_door).pack(side="right")
 
 # The project picker along the top of the window: a label and a dropdown.
 # It's packed first, so it sits above the summary and the table.

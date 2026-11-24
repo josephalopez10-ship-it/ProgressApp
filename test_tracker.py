@@ -348,11 +348,11 @@ class GuiTestBase(UsesTempSaveFile):
 
 
 # ---------------------------------------------------------------------------
-# The GUI's main table and Add door window
+# The GUI's main table and Add Door window
 # ---------------------------------------------------------------------------
 class TestGuiAddDoor(GuiTestBase):
 
-    # Helper: open the Add door window and find its boxes and buttons.
+    # Helper: open the Add Door window and find its boxes and buttons.
     def open_add_window(self):
         self.gui["open_add_door"]()
         add_window = self.newest_window()
@@ -385,7 +385,7 @@ class TestGuiAddDoor(GuiTestBase):
         self.assertIn(("Stair 2", "R", ["Card Reader=C", "Lock=R"]), self.table_rows())
         # ...is saved to the file...
         self.assertIn({"name": "Stair 2", "devices": {"Card Reader": "C", "Lock": "R"}}, self.saved_file())
-        # ...and the Add door window closed.
+        # ...and the Add Door window closed.
         self.assertFalse(add_window.winfo_exists())
 
     def test_duplicate_device_is_blocked(self):
@@ -484,7 +484,7 @@ class TestGuiEditDoor(GuiTestBase):
 
     def test_nothing_selected_shows_error(self):
         self.gui["open_edit_door"]()
-        self.assertEqual(self.errors, ["Click a door in the list first"])
+        self.assertEqual(self.errors, ["Click a door in the list first."])
 
     def test_device_row_opens_its_door(self):
         tree = self.gui["tree"]
@@ -538,7 +538,7 @@ class TestGuiEditDoor(GuiTestBase):
         edit = self.open_edit_window("Joes Door")
         edit["new_device"].insert(0, "Power Supply")
         edit["new_status"].set("N")
-        edit["buttons"]["Add device"].invoke()
+        edit["buttons"]["Add Device"].invoke()
 
         self.assertEqual(self.errors, [])
         self.assertIn("Power Supply=N", self.table_rows()[0][2])
@@ -549,18 +549,18 @@ class TestGuiEditDoor(GuiTestBase):
     def test_add_duplicate_device_is_blocked(self):
         edit = self.open_edit_window("Joes Door")
         edit["new_device"].insert(0, "card reader")
-        edit["buttons"]["Add device"].invoke()
-        self.assertEqual(self.errors, ["card reader is already on this door"])
+        edit["buttons"]["Add Device"].invoke()
+        self.assertEqual(self.errors, ["card reader is already on this door."])
 
     def test_add_blank_device_is_blocked(self):
         edit = self.open_edit_window("Joes Door")
-        edit["buttons"]["Add device"].invoke()
+        edit["buttons"]["Add Device"].invoke()
         self.assertEqual(self.errors, ["Type a name first."])
 
     def test_delete_device_yes(self):
         edit = self.open_edit_window("alex door")
         self.click_device(edit, "Sounder")
-        edit["buttons"]["Delete device"].invoke()
+        edit["buttons"]["Delete Device"].invoke()
         self.assertEqual(self.saved_file()[1]["devices"], {})
         self.assertEqual(edit["devices"].size(), 0)
 
@@ -568,7 +568,7 @@ class TestGuiEditDoor(GuiTestBase):
         self.answer_yes = False
         edit = self.open_edit_window("alex door")
         self.click_device(edit, "Sounder")
-        edit["buttons"]["Delete device"].invoke()
+        edit["buttons"]["Delete Device"].invoke()
         self.assertEqual(self.doors()[1].devices, {"Sounder": "R"})
 
     def test_rename(self):
@@ -672,7 +672,7 @@ class TestGuiEditDoor(GuiTestBase):
 
 
 # ---------------------------------------------------------------------------
-# The GUI's Remove Door button
+# The GUI's Delete Door button (main window)
 # ---------------------------------------------------------------------------
 class TestGuiRemoveDoor(GuiTestBase):
 
@@ -695,7 +695,7 @@ class TestGuiRemoveDoor(GuiTestBase):
 
     def test_nothing_selected_shows_error(self):
         self.gui["remove_selected_door"]()
-        self.assertEqual(self.errors, ["Click a door in the list first"])
+        self.assertEqual(self.errors, ["Click a door in the list first."])
         self.assertEqual(len(self.doors()), 2)
 
     def test_no_keeps_the_door(self):
@@ -992,7 +992,7 @@ class TestGuiProjects(GuiTestBase):
     def test_new_door_only_goes_into_current_project(self):
         self.gui["window"].update()
         self.pick_project("City Hospital")
-        # Add a door through the real Add door window.
+        # Add a door through the real Add Door window.
         self.gui["open_add_door"]()
         add_window = self.newest_window()
         name_entry = [w for w in add_window.winfo_children() if type(w) is ttk.Entry][0]
@@ -1097,7 +1097,7 @@ class TestGuiProjectButtons(GuiTestBase):
         project_window, entries, buttons = self.open_project_window("edit_project")
         self.assertEqual([e.get() for e in entries],
                          ["Westfield Mall", "24-117", "1200 Main St", "Acme Builders"])
-        self.assertEqual(project_window.title(), "Edit project - Westfield Mall")
+        self.assertEqual(project_window.title(), "Edit Project - Westfield Mall")
 
     def test_edit_project_details(self):
         project_window, entries, buttons = self.open_project_window("edit_project")
