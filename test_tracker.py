@@ -32,6 +32,7 @@ from project import Project
 import storage
 import report
 import install_launcher
+import trackerapp_gui
 
 
 # Each class below is a group of related tests.
@@ -273,8 +274,8 @@ class TestStorage(UsesTempSaveFile):
 
 # ---------------------------------------------------------------------------
 # A base class for the GUI tests.
-# It builds the real window and lets tests "click" buttons with .invoke(),
-# but never calls mainloop(), so nothing stays open on screen.
+# It builds the real window (a TrackerApp) and lets tests "click" buttons
+# with .invoke(), but never calls mainloop(), so nothing stays open on screen.
 # It has no test_ methods of its own, so it doesn't run any tests itself.
 # ---------------------------------------------------------------------------
 class GuiTestBase(UsesTempSaveFile):
@@ -313,21 +314,22 @@ class GuiTestBase(UsesTempSaveFile):
         self.real_askyesno = messagebox.askyesno
         messagebox.askyesno = lambda title, message, **options: self.answer_yes
 
-        # Run trackerapp_gui.py with mainloop() switched off, so it builds the
-        # window and then returns instead of waiting for clicks.
-        self.real_mainloop = tk.Tk.mainloop
-        tk.Tk.mainloop = lambda self: None
-        self.gui = {}
+        # Start the app the same way main() does, but without mainloop(), so
+        # it builds the window and returns instead of waiting for clicks.
+        # self.app is the TrackerApp: self.app.tree is its table, and
+        # self.app.open_add_door() clicks Add Door.
         try:
-            with open("trackerapp_gui.py", encoding="utf-8") as file:
-                exec(file.read(), self.gui)
+            trackerapp_gui.load_projects_or_stop()
+            self.app = trackerapp_gui.TrackerApp()
         except tk.TclError:
             self.skipTest("No screen available to open a window.")
 
     def tearDown(self):
-        if "window" in self.gui:
-            self.gui["window"].destroy()
-        tk.Tk.mainloop = self.real_mainloop
+        # Close the window, unless a test already did (like quitting the app).
+        try:
+            self.app.window.destroy()
+        except tk.TclError:
+            pass
         messagebox.showerror = self.real_showerror
         messagebox.askyesno = self.real_askyesno
         super().tearDown()
@@ -336,7 +338,7 @@ class GuiTestBase(UsesTempSaveFile):
     # The table SHOWS words ("Complete"), but each row's tag keeps the
     # letter ("C"), so the tests can keep comparing short letters.
     def table_rows(self):
-        tree = self.gui["tree"]
+        tree = self.app.tree
         rows = []
         for door_row in tree.get_children():
             devices = [tree.item(row, "text") + "=" + tree.item(row, "tags")[0]
@@ -352,11 +354,11 @@ class GuiTestBase(UsesTempSaveFile):
 
     # Helper: the doors of the project the GUI is showing.
     def doors(self):
-        return self.gui["current_project"].doors
+        return self.app.current_project.doors
 
     # Helper: the newest Toplevel (pop-up) window that's open.
     def newest_window(self):
-        window = self.gui["window"]
+        window = self.app.window
         return [w for w in window.winfo_children() if isinstance(w, tk.Toplevel)][-1]
 
 
@@ -367,7 +369,7 @@ class TestGuiAddDoor(GuiTestBase):
 
     # Helper: open the Add Door window and find its boxes and buttons.
     def open_add_window(self):
-        self.gui["open_add_door"]()
+        self.app.open_add_door()
         add_window = self.newest_window()
         widgets = add_window.winfo_children()
         # The two text boxes, in the order they were created: name, then device.
@@ -387,7 +389,7 @@ class TestGuiAddDoor(GuiTestBase):
         self.assertEqual(self.table_rows(), [("Joes Door", "P", ["Lock=P"])])
 
     def test_table_shows_status_as_words(self):
-        tree = self.gui["tree"]
+        tree = self.app.tree
         door_row = tree.get_children()[0]
         device_row = tree.get_children(door_row)[0]
         # tree.set(row, "status") reads one column of one row.
@@ -395,7 +397,7 @@ class TestGuiAddDoor(GuiTestBase):
         self.assertEqual(tree.set(device_row, "status"), "Pending")
 
     def test_devices_column_counts_complete_devices(self):
-        tree = self.gui["tree"]
+        tree = self.app.tree
         door_row = tree.get_children()[0]
         device_row = tree.get_children(door_row)[0]
         # Joes Door has one device, Lock, which is pending.
@@ -405,8 +407,8 @@ class TestGuiAddDoor(GuiTestBase):
 
     def test_devices_column_shows_dash_with_no_devices(self):
         self.doors().append(Door("Empty Door"))
-        self.gui["refresh_tree"]()
-        tree = self.gui["tree"]
+        self.app.refresh_tree()
+        tree = self.app.tree
         self.assertEqual(tree.set(tree.get_children()[1], "devices"), "—")
 
     def test_add_door_with_devices(self):
@@ -471,7 +473,7 @@ class TestGuiEditDoor(GuiTestBase):
 
     # Helper: click a door's row in the main table.
     def select_door(self, name):
-        tree = self.gui["tree"]
+        tree = self.app.tree
         for row in tree.get_children():
             if tree.item(row, "text") == name:
                 tree.selection_set(row)
@@ -481,7 +483,7 @@ class TestGuiEditDoor(GuiTestBase):
     # boxes and buttons. Returns them in a dictionary.
     def open_edit_window(self, door_name):
         self.select_door(door_name)
-        self.gui["open_edit_door"]()
+        self.app.open_edit_door()
         edit_window = self.newest_window()
         widgets = edit_window.winfo_children()
         # Text boxes and dropdowns, in the order they were created.
@@ -519,15 +521,15 @@ class TestGuiEditDoor(GuiTestBase):
                 return status
 
     def test_nothing_selected_shows_error(self):
-        self.gui["open_edit_door"]()
+        self.app.open_edit_door()
         self.assertEqual(self.errors, ["Click a door in the list first."])
 
     def test_device_row_opens_its_door(self):
-        tree = self.gui["tree"]
+        tree = self.app.tree
         door_row = self.select_door("alex door")
         # Click the first device row under alex door instead of the door itself.
         tree.selection_set(tree.get_children(door_row)[0])
-        self.gui["open_edit_door"]()
+        self.app.open_edit_door()
         self.assertEqual(self.newest_window().title(), "Edit Door - alex door")
 
     def test_clicking_device_shows_its_status(self):
@@ -648,22 +650,22 @@ class TestGuiEditDoor(GuiTestBase):
     # Helper: double-click the table at height y, the way a real mouse does:
     # press and release the left button twice, quickly.
     def double_click_at(self, y):
-        tree = self.gui["tree"]
+        tree = self.app.tree
         for click in range(2):
             tree.event_generate("<ButtonPress-1>", x=40, y=y)
             tree.event_generate("<ButtonRelease-1>", x=40, y=y)
-        self.gui["window"].update()
+        self.app.window.update()
 
     # Helper: double-click on a row in the table.
     def double_click_row(self, row):
-        self.gui["window"].update()
+        self.app.window.update()
         # bbox() gives the row's position on screen: x, y, width, height.
-        x, y, width, height = self.gui["tree"].bbox(row)
+        x, y, width, height = self.app.tree.bbox(row)
         self.double_click_at(y + height // 2)
 
     # Helper: titles of the pop-up windows that are open.
     def open_window_titles(self):
-        window = self.gui["window"]
+        window = self.app.window
         return [w.title() for w in window.winfo_children() if isinstance(w, tk.Toplevel)]
 
     def test_double_click_door_opens_edit(self):
@@ -671,20 +673,20 @@ class TestGuiEditDoor(GuiTestBase):
         self.double_click_row(door_row)
         self.assertEqual(self.open_window_titles(), ["Edit Door - Joes Door"])
         # The door's device list must NOT collapse (that's what return "break" stops).
-        self.assertTrue(self.gui["tree"].item(door_row, "open"))
+        self.assertTrue(self.app.tree.item(door_row, "open"))
         # The Edit window must be tied to the main window, so the desktop keeps
         # it in front instead of hiding it behind the main window.
         edit_window = self.newest_window()
-        self.assertEqual(str(edit_window.transient()), str(self.gui["window"]))
+        self.assertEqual(str(edit_window.transient()), str(self.app.window))
 
     def test_double_click_device_opens_its_door(self):
-        tree = self.gui["tree"]
+        tree = self.app.tree
         door_row = self.select_door("alex door")
         self.double_click_row(tree.get_children(door_row)[0])
         self.assertEqual(self.open_window_titles(), ["Edit Door - alex door"])
 
     def test_double_click_empty_space_does_nothing(self):
-        self.gui["window"].update()
+        self.app.window.update()
         # Far below the last row, where there's nothing to click.
         self.double_click_at(450)
         self.assertEqual(self.open_window_titles(), [])
@@ -719,7 +721,7 @@ class TestGuiRemoveDoor(GuiTestBase):
 
     # Helper: click a door's row in the main table and return the row.
     def select_door(self, name):
-        tree = self.gui["tree"]
+        tree = self.app.tree
         for row in tree.get_children():
             if tree.item(row, "text") == name:
                 tree.selection_set(row)
@@ -730,30 +732,30 @@ class TestGuiRemoveDoor(GuiTestBase):
         return [name for name, status, devices in self.table_rows()]
 
     def test_nothing_selected_shows_error(self):
-        self.gui["remove_selected_door"]()
+        self.app.remove_selected_door()
         self.assertEqual(self.errors, ["Click a door in the list first."])
         self.assertEqual(len(self.doors()), 2)
 
     def test_no_keeps_the_door(self):
         self.answer_yes = False
         self.select_door("Delete Me")
-        self.gui["remove_selected_door"]()
+        self.app.remove_selected_door()
         self.assertEqual(self.table_names(), ["Joes Door", "Delete Me"])
         self.assertEqual(len(self.saved_file()), 2)
 
     def test_yes_removes_the_door(self):
         self.select_door("Delete Me")
-        self.gui["remove_selected_door"]()
+        self.app.remove_selected_door()
         # Gone from the table and the save file. The other door is untouched.
         self.assertEqual(self.table_names(), ["Joes Door"])
         self.assertEqual(self.saved_file(), [{"name": "Joes Door", "devices": {"Lock": "P"}}])
 
     def test_selecting_device_row_removes_its_door(self):
-        tree = self.gui["tree"]
+        tree = self.app.tree
         door_row = self.select_door("Delete Me")
         # Click the device row under the door instead of the door itself.
         tree.selection_set(tree.get_children(door_row)[0])
-        self.gui["remove_selected_door"]()
+        self.app.remove_selected_door()
         self.assertEqual(self.table_names(), ["Joes Door"])
 
 
@@ -771,7 +773,7 @@ class TestGuiSummary(GuiTestBase):
 
     # Helper: the summary's text.
     def summary(self):
-        return self.gui["summary_label"].cget("text")
+        return self.app.summary_label.cget("text")
 
     def test_counts_doors_and_devices(self):
         # 5 devices that aren't N, and 2 of them are C: 2 / 5 = 40%.
@@ -781,27 +783,27 @@ class TestGuiSummary(GuiTestBase):
 
     def test_progress_bar_matches_percent(self):
         # float() because tkinter may hand the value back as text or a decimal.
-        self.assertEqual(float(self.gui["progress_bar"].cget("value")), 40)
+        self.assertEqual(float(self.app.progress_bar.cget("value")), 40)
 
     def test_updates_after_a_change(self):
         # Change Busy Door's REX from P to C, then redraw like the app does.
         self.doors()[1].devices["REX"] = "C"
-        self.gui["refresh_tree"]()
-        self.assertEqual(float(self.gui["progress_bar"].cget("value")), 60)
+        self.app.refresh_tree()
+        self.assertEqual(float(self.app.progress_bar.cget("value")), 60)
         self.assertEqual(self.summary(),
                          "4 doors: 2 complete, 1 pending, 1 restrained\n"
                          "Devices: 3 of 5 complete (60%)")
 
     def test_updates_after_remove(self):
-        tree = self.gui["tree"]
+        tree = self.app.tree
         tree.selection_set(tree.get_children()[2])   # Stuck Door
-        self.gui["remove_selected_door"]()
+        self.app.remove_selected_door()
         self.assertTrue(self.summary().startswith("3 doors: 1 complete, 2 pending, 0 restrained"))
 
     def test_no_doors_does_not_crash(self):
         # With no devices at all, the percent must not divide by zero.
         self.doors().clear()
-        self.gui["refresh_tree"]()
+        self.app.refresh_tree()
         self.assertEqual(self.summary(),
                          "0 doors: 0 complete, 0 pending, 0 restrained\n"
                          "Devices: 0 of 0 complete (0%)")
@@ -844,7 +846,7 @@ class TestGuiExport(GuiTestBase):
         super().tearDown()
 
     def test_file_menu_has_both_formats(self):
-        menu = self.gui["file_menu"]
+        menu = self.app.file_menu
         # index("end") is the number of the last item, so +1 is how many there are.
         labels = [menu.entrycget(i, "label") for i in range(menu.index("end") + 1)
                   if menu.type(i) == "command"]
@@ -852,20 +854,20 @@ class TestGuiExport(GuiTestBase):
         self.assertIn("Export PDF Report...", labels)
 
     def test_cancel_saves_nothing(self):
-        self.gui["export_text"]()
-        self.gui["export_pdf"]()
+        self.app.export_text()
+        self.app.export_pdf()
         self.assertEqual(self.info_messages, [])
         self.assertEqual(self.errors, [])
 
     def test_suggested_file_names(self):
         # The project is called "Test Project": the space becomes "_".
-        self.gui["export_text"]()
+        self.app.export_text()
         self.assertEqual(self.save_as_options["initialfile"], f"Test_Project_report_{date.today()}.txt")
-        self.gui["export_pdf"]()
+        self.app.export_pdf()
         self.assertEqual(self.save_as_options["initialfile"], f"Test_Project_report_{date.today()}.pdf")
 
     def test_safe_file_name(self):
-        safe_file_name = self.gui["safe_file_name"]
+        safe_file_name = trackerapp_gui.safe_file_name
         self.assertEqual(safe_file_name("Westfield Mall / Phase 2"), "Westfield_Mall___Phase_2")
         self.assertEqual(safe_file_name("Job-24_117"), "Job-24_117")
 
@@ -877,7 +879,7 @@ class TestGuiExport(GuiTestBase):
     def export_and_read(self):
         report_path = Path(self.temp_folder.name) / "report.txt"
         self.save_as_answer = str(report_path)
-        self.gui["export_text"]()
+        self.app.export_text()
         self.assertEqual(self.errors, [])
         self.assertEqual(self.info_messages, [f"Report saved to:\n{report_path}"])
         # splitlines() splits the text into a list, one item per line.
@@ -915,9 +917,9 @@ class TestGuiExport(GuiTestBase):
 
     def test_folder_that_does_not_exist_shows_error(self):
         self.save_as_answer = str(Path(self.temp_folder.name) / "no_such_folder" / "report.txt")
-        self.gui["export_text"]()
+        self.app.export_text()
         self.save_as_answer = str(Path(self.temp_folder.name) / "no_such_folder" / "report.pdf")
-        self.gui["export_pdf"]()
+        self.app.export_pdf()
         # One error for each format, and nothing saved.
         self.assertEqual(len(self.errors), 2)
         for error in self.errors:
@@ -927,7 +929,7 @@ class TestGuiExport(GuiTestBase):
     def test_export_pdf_makes_a_pdf(self):
         pdf_path = Path(self.temp_folder.name) / "report.pdf"
         self.save_as_answer = str(pdf_path)
-        self.gui["export_pdf"]()
+        self.app.export_pdf()
 
         self.assertEqual(self.errors, [])
         self.assertEqual(self.info_messages, [f"Report saved to:\n{pdf_path}"])
@@ -941,10 +943,10 @@ class TestGuiExport(GuiTestBase):
         # computer doesn't have it, the test is skipped instead of failing.
         if shutil.which("pdftotext") is None:
             self.skipTest("pdftotext isn't installed, so the PDF's text can't be read.")
-        self.gui["current_project"].customer = "Smith & Sons <East>"
+        self.app.current_project.customer = "Smith & Sons <East>"
         pdf_path = Path(self.temp_folder.name) / "report.pdf"
         self.save_as_answer = str(pdf_path)
-        self.gui["export_pdf"]()
+        self.app.export_pdf()
         self.assertEqual(self.errors, [])
 
         # Run pdftotext and read its output. "-" means "print the text"
@@ -1008,35 +1010,35 @@ class TestGuiProjects(GuiTestBase):
 
     # Helper: pick a project in the dropdown, the way a user does.
     def pick_project(self, name):
-        project_box = self.gui["project_box"]
+        project_box = self.app.project_box
         project_box.set(name)
         # Send the same event a real pick sends, then let tkinter handle it.
         project_box.event_generate("<<ComboboxSelected>>")
-        self.gui["window"].update()
+        self.app.window.update()
 
     def test_starts_on_first_project(self):
-        self.assertEqual(self.gui["project_box"].get(), "Westfield Mall")
-        self.assertEqual(self.gui["window"].title(), "TrackerApp - Westfield Mall")
+        self.assertEqual(self.app.project_box.get(), "Westfield Mall")
+        self.assertEqual(self.app.window.title(), "TrackerApp - Westfield Mall")
         self.assertEqual([name for name, status, devices in self.table_rows()],
                          ["Main Entrance", "Loading Dock"])
 
     def test_dropdown_lists_every_project(self):
-        self.assertEqual(list(self.gui["project_box"].cget("values")),
+        self.assertEqual(list(self.app.project_box.cget("values")),
                          ["Westfield Mall", "City Hospital"])
 
     def test_picking_a_project_shows_its_doors_and_summary(self):
-        self.gui["window"].update()
+        self.app.window.update()
         self.pick_project("City Hospital")
-        self.assertEqual(self.gui["current_project"].name, "City Hospital")
-        self.assertEqual(self.gui["window"].title(), "TrackerApp - City Hospital")
+        self.assertEqual(self.app.current_project.name, "City Hospital")
+        self.assertEqual(self.app.window.title(), "TrackerApp - City Hospital")
         self.assertEqual(self.table_rows(), [("Main Entrance", "P", ["Lock=P"])])
-        self.assertTrue(self.gui["summary_label"].cget("text").startswith("1 doors: 0 complete, 1 pending"))
+        self.assertTrue(self.app.summary_label.cget("text").startswith("1 doors: 0 complete, 1 pending"))
 
     def test_new_door_only_goes_into_current_project(self):
-        self.gui["window"].update()
+        self.app.window.update()
         self.pick_project("City Hospital")
         # Add a door through the real Add Door window.
-        self.gui["open_add_door"]()
+        self.app.open_add_door()
         add_window = self.newest_window()
         name_entry = [w for w in add_window.winfo_children() if type(w) is ttk.Entry][0]
         name_entry.insert(0, "Roof Hatch")
@@ -1060,7 +1062,7 @@ class TestGuiProjects(GuiTestBase):
 
     def test_project_details_are_kept_when_saving(self):
         # Saving after a change must not lose a project's job number.
-        self.gui["refresh_tree"]()
+        self.app.refresh_tree()
         storage.save_projects()
         saved = json.loads(storage.PROJECTS_FILE.read_text(encoding="utf-8"))
         self.assertEqual(saved[0]["job_number"], "24-117")
@@ -1082,7 +1084,7 @@ class TestGuiProjectButtons(GuiTestBase):
     # buttons. The four boxes come back in order: name, job number, address,
     # customer.
     def open_project_window(self, button_function):
-        self.gui[button_function]()
+        getattr(self.app, button_function)()
         project_window = self.newest_window()
         widgets = project_window.winfo_children()
         entries = [w for w in widgets if type(w) is ttk.Entry]
@@ -1109,8 +1111,8 @@ class TestGuiProjectButtons(GuiTestBase):
         new = storage.project_list[-1]
         self.assertEqual((new.name, new.job_number, new.address, new.customer, new.doors),
                          ("Airport Terminal B", "25-004", "", "Skyline GC", []))
-        self.assertIs(self.gui["current_project"], new)
-        self.assertEqual(self.gui["project_box"].get(), "Airport Terminal B")
+        self.assertIs(self.app.current_project, new)
+        self.assertEqual(self.app.project_box.get(), "Airport Terminal B")
         self.assertEqual(self.table_rows(), [])
         saved = json.loads(storage.PROJECTS_FILE.read_text(encoding="utf-8"))
         self.assertEqual(saved[-1]["job_number"], "25-004")
@@ -1153,8 +1155,8 @@ class TestGuiProjectButtons(GuiTestBase):
         self.assertEqual((mall.name, mall.job_number, mall.address), ("Westfield Mall Phase 2", "24-117", "1300 Main St"))
         # The doors are still there, the title and dropdown show the new name.
         self.assertEqual([d.name for d in mall.doors], ["Main Entrance"])
-        self.assertEqual(self.gui["window"].title(), "TrackerApp - Westfield Mall Phase 2")
-        self.assertEqual(list(self.gui["project_box"].cget("values")), ["Westfield Mall Phase 2", "City Hospital"])
+        self.assertEqual(self.app.window.title(), "TrackerApp - Westfield Mall Phase 2")
+        self.assertEqual(list(self.app.project_box.cget("values")), ["Westfield Mall Phase 2", "City Hospital"])
 
     def test_edit_to_another_projects_name_is_blocked(self):
         project_window, entries, buttons = self.open_project_window("edit_project")
@@ -1172,20 +1174,20 @@ class TestGuiProjectButtons(GuiTestBase):
 
     def test_delete_project_no_keeps_it(self):
         self.answer_yes = False
-        self.gui["delete_project"]()
+        self.app.delete_project()
         self.assertEqual(len(storage.project_list), 2)
 
     def test_delete_project_yes(self):
-        self.gui["delete_project"]()
+        self.app.delete_project()
         self.assertEqual([p.name for p in storage.project_list], ["City Hospital"])
         # Switched to the project that's left, and saved.
-        self.assertEqual(self.gui["project_box"].get(), "City Hospital")
+        self.assertEqual(self.app.project_box.get(), "City Hospital")
         saved = json.loads(storage.PROJECTS_FILE.read_text(encoding="utf-8"))
         self.assertEqual([p["name"] for p in saved], ["City Hospital"])
 
     def test_cannot_delete_only_project(self):
-        self.gui["delete_project"]()      # deletes Westfield Mall
-        self.gui["delete_project"]()      # City Hospital is the only one left
+        self.app.delete_project()      # deletes Westfield Mall
+        self.app.delete_project()      # City Hospital is the only one left
         self.assertEqual(len(self.errors), 1)
         self.assertTrue(self.errors[0].startswith("This is your only project."))
         self.assertEqual([p.name for p in storage.project_list], ["City Hospital"])
@@ -1232,31 +1234,31 @@ class TestGuiTheme(GuiTestBase):
     # Helper: the text color the table uses for a status letter.
     # str() turns tkinter's color object into plain text like "#2e7d32".
     def tag_color(self, status):
-        return str(self.gui["tree"].tag_configure(status, "foreground"))
+        return str(self.app.tree.tag_configure(status, "foreground"))
 
     def test_first_run_is_light(self):
-        self.assertEqual(self.gui["sv_ttk"].get_theme(), "light")
-        self.assertFalse(self.gui["dark_mode_on"].get())
+        self.assertEqual(trackerapp_gui.sv_ttk.get_theme(), "light")
+        self.assertFalse(self.app.dark_mode_on.get())
         self.assertEqual(self.tag_color("C"), "#2e7d32")
 
     def test_toggle_to_dark_and_back(self):
-        self.gui["toggle_theme"]()
-        self.assertEqual(self.gui["sv_ttk"].get_theme(), "dark")
-        self.assertTrue(self.gui["dark_mode_on"].get())
+        self.app.toggle_theme()
+        self.assertEqual(trackerapp_gui.sv_ttk.get_theme(), "dark")
+        self.assertTrue(self.app.dark_mode_on.get())
         # Brighter status colors in dark mode.
         self.assertEqual(self.tag_color("C"), "#66bb6a")
         self.assertEqual(self.tag_color("R"), "#ef5350")
         # The choice is remembered.
         self.assertEqual(storage.load_setting("theme", "light"), "dark")
 
-        self.gui["toggle_theme"]()
-        self.assertEqual(self.gui["sv_ttk"].get_theme(), "light")
+        self.app.toggle_theme()
+        self.assertEqual(trackerapp_gui.sv_ttk.get_theme(), "light")
         self.assertEqual(self.tag_color("C"), "#2e7d32")
         self.assertEqual(storage.load_setting("theme", "light"), "light")
 
     def test_table_rows_stay_tall_after_toggle(self):
         # set_theme() resets the table style, so apply_theme() sets it again.
-        self.gui["toggle_theme"]()
+        self.app.toggle_theme()
         self.assertEqual(str(ttk.Style().lookup("Treeview", "rowheight")), "28")
 
 
@@ -1266,17 +1268,17 @@ class TestGuiStartsDark(GuiTestBase):
     SAVED_SETTINGS = {"theme": "dark"}
 
     def test_starts_in_dark_mode(self):
-        self.assertEqual(self.gui["sv_ttk"].get_theme(), "dark")
-        self.assertTrue(self.gui["dark_mode_on"].get())
+        self.assertEqual(trackerapp_gui.sv_ttk.get_theme(), "dark")
+        self.assertTrue(self.app.dark_mode_on.get())
 
     def test_popup_and_device_list_are_dark(self):
         # The Edit door window: its background and its device list must be
         # dark too, not light gray / white. sv_ttk does this a moment after
         # set_theme(), so let tkinter catch up first with update().
-        self.gui["window"].update()
-        tree = self.gui["tree"]
+        self.app.window.update()
+        tree = self.app.tree
         tree.selection_set(tree.get_children()[0])
-        self.gui["open_edit_door"]()
+        self.app.open_edit_door()
         edit_window = self.newest_window()
         edit_window.update()
         self.assertEqual(edit_window.cget("background"), "#1c1c1c")
@@ -1285,10 +1287,10 @@ class TestGuiStartsDark(GuiTestBase):
         self.assertEqual(listbox.cget("foreground"), "#fafafa")
 
     def test_switching_to_light_recolors_open_windows(self):
-        self.gui["window"].update()
-        self.gui["toggle_theme"]()
-        self.gui["window"].update()
-        self.assertEqual(self.gui["window"].cget("background"), "#fafafa")
+        self.app.window.update()
+        self.app.toggle_theme()
+        self.app.window.update()
+        self.assertEqual(self.app.window.cget("background"), "#fafafa")
 
 
 class TestGuiNoProjects(GuiTestBase):
@@ -1298,7 +1300,7 @@ class TestGuiNoProjects(GuiTestBase):
 
     def test_makes_an_empty_first_project(self):
         self.assertEqual([p.name for p in storage.project_list], ["My First Project"])
-        self.assertEqual(self.gui["project_box"].get(), "My First Project")
+        self.assertEqual(self.app.project_box.get(), "My First Project")
         self.assertEqual(self.table_rows(), [])
         # It's saved straight away.
         saved = json.loads(storage.PROJECTS_FILE.read_text(encoding="utf-8"))
@@ -1318,65 +1320,65 @@ class TestGuiSearch(GuiTestBase):
 
     # Helper: the door names showing in the table, top to bottom.
     def shown(self):
-        tree = self.gui["tree"]
+        tree = self.app.tree
         return [tree.item(row, "text") for row in tree.get_children()]
 
     def filter_text(self):
-        return self.gui["filter_label"].cget("text")
+        return self.app.filter_label.cget("text")
 
     def test_everything_shows_at_start(self):
         self.assertEqual(self.shown(), ["Main Lobby", "Loading Dock", "Stair 2"])
         self.assertEqual(self.filter_text(), "")
 
     def test_search_by_door_name_ignores_case(self):
-        self.gui["search_text"].set("LOBBY")
+        self.app.search_text.set("LOBBY")
         self.assertEqual(self.shown(), ["Main Lobby"])
         self.assertEqual(self.filter_text(), "Showing 1 of 3 doors")
 
     def test_search_finds_doors_by_device(self):
-        self.gui["search_text"].set("restraint")
+        self.app.search_text.set("restraint")
         self.assertEqual(self.shown(), ["Loading Dock"])
 
     def test_show_dropdown_filters_by_status(self):
-        self.gui["status_filter"].set("Pending")
+        self.app.status_filter.set("Pending")
         self.assertEqual(self.shown(), ["Stair 2"])
 
     def test_search_and_filter_together(self):
         # Two doors have a Lock, but only Main Lobby is complete.
-        self.gui["search_text"].set("lock")
-        self.gui["status_filter"].set("Complete")
+        self.app.search_text.set("lock")
+        self.app.status_filter.set("Complete")
         self.assertEqual(self.shown(), ["Main Lobby"])
 
     def test_no_matches_shows_zero(self):
-        self.gui["search_text"].set("nothing like this")
+        self.app.search_text.set("nothing like this")
         self.assertEqual(self.shown(), [])
         self.assertEqual(self.filter_text(), "Showing 0 of 3 doors")
 
     def test_summary_still_counts_whole_project(self):
-        before = self.gui["summary_label"].cget("text")
-        self.gui["search_text"].set("lobby")
-        self.assertEqual(self.gui["summary_label"].cget("text"), before)
+        before = self.app.summary_label.cget("text")
+        self.app.search_text.set("lobby")
+        self.assertEqual(self.app.summary_label.cget("text"), before)
 
     def test_typing_in_search_box_filters(self):
         # Type into the real box, to check it's connected to search_text.
-        self.gui["search_entry"].insert(0, "stair")
+        self.app.search_entry.insert(0, "stair")
         self.assertEqual(self.shown(), ["Stair 2"])
 
     def test_escape_clears_search(self):
-        entry = self.gui["search_entry"]
+        entry = self.app.search_entry
         entry.insert(0, "stair")
         entry.focus_force()
         entry.update()
         entry.event_generate("<Escape>")
-        self.assertEqual(self.gui["search_text"].get(), "")
+        self.assertEqual(self.app.search_text.get(), "")
         self.assertEqual(len(self.shown()), 3)
 
     def test_switching_project_clears_search(self):
-        self.gui["search_text"].set("lobby")
-        self.gui["status_filter"].set("Complete")
-        self.gui["show_project"](self.gui["current_project"])
-        self.assertEqual(self.gui["search_text"].get(), "")
-        self.assertEqual(self.gui["status_filter"].get(), "All doors")
+        self.app.search_text.set("lobby")
+        self.app.status_filter.set("Complete")
+        self.app.show_project(self.app.current_project)
+        self.assertEqual(self.app.search_text.get(), "")
+        self.assertEqual(self.app.status_filter.get(), "All doors")
         self.assertEqual(len(self.shown()), 3)
 
 
@@ -1394,15 +1396,15 @@ class TestGuiSort(GuiTestBase):
     SAVED_ORDER = ["stair 2", "Loading Dock", "Main Lobby", "Empty Door"]
 
     def shown(self):
-        tree = self.gui["tree"]
+        tree = self.app.tree
         return [tree.item(row, "text") for row in tree.get_children()]
 
     # Helper: click a column heading.
     def click(self, column):
-        self.gui["heading_clicked"](column)
+        self.app.heading_clicked(column)
 
     def heading(self, column):
-        return self.gui["tree"].heading(column, "text")
+        return self.app.tree.heading(column, "text")
 
     def test_starts_in_saved_order(self):
         self.assertEqual(self.shown(), self.SAVED_ORDER)
@@ -1446,13 +1448,13 @@ class TestGuiSort(GuiTestBase):
 
     def test_heading_click_is_connected(self):
         # Run the heading's real command, to check the click is wired up.
-        self.gui["tree"].tk.call(self.gui["tree"].heading("status", "command"))
+        self.app.tree.tk.call(self.app.tree.heading("status", "command"))
         self.assertEqual(self.heading("status"), "Status  ▲")
 
     def test_sort_stays_after_adding_a_door(self):
         self.click("#0")
         self.doors().append(Door("Annex"))
-        self.gui["refresh_tree"]()
+        self.app.refresh_tree()
         self.assertEqual(self.shown()[0], "Annex")
 
 
@@ -1462,22 +1464,22 @@ class TestGuiSort(GuiTestBase):
 class TestGuiStatusBar(GuiTestBase):
 
     def status(self):
-        return self.gui["status_label"].cget("text")
+        return self.app.status_label.cget("text")
 
     def test_starts_as_ready(self):
         self.assertEqual(self.status(), "Ready")
 
     def test_save_changes_shows_message_and_time(self):
-        self.gui["save_changes"]("Added Stair 2")
+        self.app.save_changes("Added Stair 2")
         # The time changes every minute, so only check the start, and that
         # it ends with AM or PM.
         self.assertTrue(self.status().startswith("Added Stair 2 — saved at "))
         self.assertTrue(self.status().endswith(("AM", "PM")))
 
     def test_deleting_a_door_updates_status(self):
-        tree = self.gui["tree"]
+        tree = self.app.tree
         tree.selection_set(tree.get_children()[0])
-        self.gui["remove_selected_door"]()
+        self.app.remove_selected_door()
         self.assertTrue(self.status().startswith("Deleted Joes Door — saved at "))
 
     def test_failed_save_warns_instead_of_crashing(self):
@@ -1487,7 +1489,7 @@ class TestGuiStatusBar(GuiTestBase):
         real_save = storage.save_projects
         storage.save_projects = broken_save
         try:
-            self.gui["save_changes"]("Added Stair 2")
+            self.app.save_changes("Added Stair 2")
         finally:
             storage.save_projects = real_save
         self.assertEqual(self.status(), "NOT SAVED: Added Stair 2")
@@ -1495,9 +1497,9 @@ class TestGuiStatusBar(GuiTestBase):
         self.assertIn("disk full", self.errors[0])
 
     def test_edit_window_set_status_message(self):
-        tree = self.gui["tree"]
+        tree = self.app.tree
         tree.selection_set(tree.get_children()[0])
-        self.gui["open_edit_door"]()
+        self.app.open_edit_door()
         edit_window = self.newest_window()
         widgets = edit_window.winfo_children()
         listbox = [w for w in widgets if isinstance(w, tk.Listbox)][0]
@@ -1531,42 +1533,42 @@ class TestGuiMenuBar(GuiTestBase):
                 if menu.type(i) not in ("separator", "tearoff")]
 
     def test_menu_bar_has_four_menus(self):
-        menu_bar = self.gui["menu_bar"]
+        menu_bar = self.app.menu_bar
         self.assertEqual(self.labels(menu_bar), ["File", "Edit", "View", "Help"])
 
     def test_edit_menu_items(self):
-        self.assertEqual(self.labels(self.gui["edit_menu"]),
+        self.assertEqual(self.labels(self.app.edit_menu),
                          ["Add Door...", "Edit Door...", "Delete Door", "Edit Project...", "Delete Project"])
 
     def test_add_door_from_menu(self):
-        self.gui["edit_menu"].invoke("Add Door...")
+        self.app.edit_menu.invoke("Add Door...")
         self.assertEqual(self.newest_window().title(), "Add Door")
 
     def test_about_shows_version_and_save_file(self):
-        self.gui["help_menu"].invoke(f"About {self.gui['APP_NAME']}")
+        self.app.help_menu.invoke(f"About {trackerapp_gui.APP_NAME}")
         title, message = self.info[0]
         self.assertEqual(title, "About TrackerApp")
-        self.assertIn("version " + self.gui["APP_VERSION"], message)
+        self.assertIn("version " + trackerapp_gui.APP_VERSION, message)
         self.assertIn(str(storage.PROJECTS_FILE), message)
 
     def test_keyboard_shortcuts_lists_ctrl_n(self):
-        self.gui["help_menu"].invoke("Keyboard Shortcuts")
+        self.app.help_menu.invoke("Keyboard Shortcuts")
         title, message = self.info[0]
         self.assertEqual(title, "Keyboard Shortcuts")
         self.assertIn("Ctrl+N", message)
 
     def test_dark_mode_tick_follows_theme(self):
-        self.assertFalse(self.gui["dark_mode_on"].get())
-        self.gui["view_menu"].invoke("Dark Mode")
-        self.assertTrue(self.gui["dark_mode_on"].get())
-        self.assertEqual(self.gui["sv_ttk"].get_theme(), "dark")
+        self.assertFalse(self.app.dark_mode_on.get())
+        self.app.view_menu.invoke("Dark Mode")
+        self.assertTrue(self.app.dark_mode_on.get())
+        self.assertEqual(trackerapp_gui.sv_ttk.get_theme(), "dark")
         # Clicking it again switches back, and the tick follows.
-        self.gui["view_menu"].invoke("Dark Mode")
-        self.assertFalse(self.gui["dark_mode_on"].get())
-        self.assertEqual(self.gui["sv_ttk"].get_theme(), "light")
+        self.app.view_menu.invoke("Dark Mode")
+        self.assertFalse(self.app.dark_mode_on.get())
+        self.assertEqual(trackerapp_gui.sv_ttk.get_theme(), "light")
 
     def test_window_title_uses_app_name(self):
-        self.assertEqual(self.gui["window"].title(), "TrackerApp - Test Project")
+        self.assertEqual(self.app.window.title(), "TrackerApp - Test Project")
 
 
 # ---------------------------------------------------------------------------
@@ -1576,7 +1578,7 @@ class TestGuiWindowSize(GuiTestBase):
 
     # safe_geometry() is tested with a pretend 1920 x 1080 screen.
     def safe(self, geometry):
-        return self.gui["safe_geometry"](geometry, 1920, 1080)
+        return trackerapp_gui.safe_geometry(geometry, 1920, 1080)
 
     def test_good_geometry_is_kept(self):
         self.assertEqual(self.safe("700x800+120+40"), "700x800+120+40")
@@ -1593,16 +1595,15 @@ class TestGuiWindowSize(GuiTestBase):
             self.assertEqual(self.safe(bad), "560x680")
 
     def test_quit_saves_geometry(self):
-        window = self.gui["window"]
+        window = self.app.window
         window.update()
         expected = window.geometry()
-        self.gui["quit_app"]()
-        # The window is gone now, so tearDown mustn't destroy it again.
-        del self.gui["window"]
+        self.app.quit_app()
+        # The window is gone now; tearDown knows to skip closing it again.
         self.assertEqual(storage.load_setting("window_geometry", None), expected)
 
     def test_x_button_runs_quit_app(self):
-        self.assertIn("quit_app", self.gui["window"].protocol("WM_DELETE_WINDOW"))
+        self.assertIn("quit_app", self.app.window.protocol("WM_DELETE_WINDOW"))
 
 
 class TestGuiStartsAtSavedSize(GuiTestBase):
@@ -1610,7 +1611,7 @@ class TestGuiStartsAtSavedSize(GuiTestBase):
     SAVED_SETTINGS = {"window_geometry": "620x700+50+60"}
 
     def test_window_opens_at_saved_size(self):
-        window = self.gui["window"]
+        window = self.app.window
         window.update()
         self.assertEqual(window.winfo_width(), 620)
         self.assertEqual(window.winfo_height(), 700)
@@ -1622,22 +1623,24 @@ class TestGuiStartsAtSavedSize(GuiTestBase):
 class TestGuiIcon(GuiTestBase):
 
     def test_icon_file_exists(self):
-        self.assertTrue(self.gui["ICON_FILE"].exists())
+        self.assertTrue(trackerapp_gui.ICON_FILE.exists())
 
     def test_icon_is_loaded(self):
-        icon = self.gui["app_icon"]
+        icon = self.app.app_icon
         self.assertEqual((icon.width(), icon.height()), (256, 256))
 
     def test_missing_icon_does_not_crash(self):
         # Start the app again with ICON_FILE pointing at a file that isn't
-        # there. Swap the line that sets it before running the code.
-        self.gui["window"].destroy()
-        code = Path("trackerapp_gui.py").read_text(encoding="utf-8")
-        code = code.replace('storage.FOLDER / "icon.png"', 'storage.FOLDER / "no_such_icon.png"')
-        self.gui = {}
-        exec(code, self.gui)
-        self.assertNotIn("app_icon", self.gui)
-        self.assertTrue(self.gui["window"].winfo_exists())
+        # there, then put the real path back.
+        self.app.window.destroy()
+        real_icon_file = trackerapp_gui.ICON_FILE
+        trackerapp_gui.ICON_FILE = real_icon_file.with_name("no_such_icon.png")
+        try:
+            self.app = trackerapp_gui.TrackerApp()
+        finally:
+            trackerapp_gui.ICON_FILE = real_icon_file
+        self.assertIsNone(self.app.app_icon)
+        self.assertTrue(self.app.window.winfo_exists())
 
 
 # ---------------------------------------------------------------------------
@@ -1645,11 +1648,11 @@ class TestGuiIcon(GuiTestBase):
 # ---------------------------------------------------------------------------
 class TestGuiErrors(GuiTestBase):
 
-    # Helper: start the app again from the top, the way the test setup does.
+    # Helper: start the app again from the top, the way main() does.
     def restart_app(self):
-        self.gui["window"].destroy()
-        self.gui = {}
-        exec(Path("trackerapp_gui.py").read_text(encoding="utf-8"), self.gui)
+        self.app.window.destroy()
+        trackerapp_gui.load_projects_or_stop()
+        self.app = trackerapp_gui.TrackerApp()
 
     def test_damaged_file_shows_pop_up_and_stops(self):
         broken_text = '[{"name": "Westfield Mall", "doors": ['
@@ -1673,7 +1676,7 @@ class TestGuiErrors(GuiTestBase):
 
     def test_crash_in_a_button_shows_pop_up(self):
         # A button whose function has a bug (dividing by zero).
-        button = ttk.Button(self.gui["window"], command=lambda: 1 / 0)
+        button = ttk.Button(self.app.window, command=lambda: 1 / 0)
         # redirect_stderr hides the error details printed to the terminal.
         with contextlib.redirect_stderr(io.StringIO()):
             button.invoke()
@@ -1738,17 +1741,17 @@ class TestGuiShortcuts(GuiTestBase):
 
     # Helper: click Joes Door in the main table.
     def select_joes_door(self):
-        tree = self.gui["tree"]
+        tree = self.app.tree
         tree.selection_set(tree.get_children()[0])
         return tree
 
     def test_popups_have_padding_and_fixed_size(self):
         # Check all three pop-ups: Add Door, Edit Door, and New Project.
-        self.gui["open_add_door"]()
+        self.app.open_add_door()
         self.select_joes_door()
-        self.gui["open_edit_door"]()
-        self.gui["new_project"]()
-        window = self.gui["window"]
+        self.app.open_edit_door()
+        self.app.new_project()
+        window = self.app.window
         popups = [w for w in window.winfo_children() if isinstance(w, tk.Toplevel)]
         self.assertEqual(len(popups), 3)
         for popup in popups:
@@ -1758,21 +1761,21 @@ class TestGuiShortcuts(GuiTestBase):
             self.assertEqual(popup.resizable(), (False, False))
 
     def test_escape_closes_add_door_window(self):
-        self.gui["open_add_door"]()
+        self.app.open_add_door()
         add_window = self.newest_window()
         self.press(add_window, "<Escape>")
         self.assertFalse(add_window.winfo_exists())
         self.assertEqual(len(self.doors()), 1)
 
     def test_add_door_window_starts_in_name_box(self):
-        self.gui["open_add_door"]()
+        self.app.open_add_door()
         add_window = self.newest_window()
         add_window.update()
         name_entry = self.entries(add_window)[0]
         self.assertEqual(add_window.focus_get(), name_entry)
 
     def test_enter_in_device_box_adds_device(self):
-        self.gui["open_add_door"]()
+        self.app.open_add_door()
         add_window = self.newest_window()
         name_entry, device_entry = self.entries(add_window)
         device_entry.insert(0, "Lock")
@@ -1784,7 +1787,7 @@ class TestGuiShortcuts(GuiTestBase):
 
     def test_enter_in_edit_window_adds_device(self):
         self.select_joes_door()
-        self.gui["open_edit_door"]()
+        self.app.open_edit_door()
         edit_window = self.newest_window()
         name_entry, new_device_entry = self.entries(edit_window)
         new_device_entry.insert(0, "REX")
@@ -1792,21 +1795,21 @@ class TestGuiShortcuts(GuiTestBase):
         self.assertEqual(self.doors()[0].devices, {"Lock": "P", "REX": "P"})
 
     def test_enter_in_project_window_saves(self):
-        self.gui["new_project"]()
+        self.app.new_project()
         project_window = self.newest_window()
         name_entry = self.entries(project_window)[0]
         name_entry.insert(0, "Westfield Mall")
         self.press(name_entry, "<Return>")
         self.assertFalse(project_window.winfo_exists())
-        self.assertEqual(self.gui["current_project"].name, "Westfield Mall")
+        self.assertEqual(self.app.current_project.name, "Westfield Mall")
 
     def test_ctrl_n_opens_add_door_window(self):
-        self.press(self.gui["tree"], "<Control-n>")
+        self.press(self.app.tree, "<Control-n>")
         self.assertEqual(self.newest_window().title(), "Add Door")
 
     def test_ctrl_f_jumps_to_search_box(self):
-        self.press(self.gui["tree"], "<Control-f>")
-        self.assertEqual(self.gui["window"].focus_get(), self.gui["search_entry"])
+        self.press(self.app.tree, "<Control-f>")
+        self.assertEqual(self.app.window.focus_get(), self.app.search_entry)
 
     def test_enter_on_table_opens_edit_window(self):
         tree = self.select_joes_door()
