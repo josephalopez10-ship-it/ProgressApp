@@ -1504,6 +1504,65 @@ class TestGuiStatusBar(GuiTestBase):
 
 
 # ---------------------------------------------------------------------------
+# The menu bar (File, Edit, View, Help) and the About box
+# ---------------------------------------------------------------------------
+class TestGuiMenuBar(GuiTestBase):
+
+    def setUp(self):
+        super().setUp()
+        # Record showinfo pop-ups instead of waiting for someone to click OK.
+        self.info = []
+        self.real_showinfo = messagebox.showinfo
+        messagebox.showinfo = lambda title, message, **options: self.info.append((title, message))
+
+    def tearDown(self):
+        messagebox.showinfo = self.real_showinfo
+        super().tearDown()
+
+    # Helper: the labels in one menu, skipping the separator lines.
+    def labels(self, menu):
+        return [menu.entrycget(i, "label") for i in range(menu.index("end") + 1)
+                if menu.type(i) not in ("separator", "tearoff")]
+
+    def test_menu_bar_has_four_menus(self):
+        menu_bar = self.gui["menu_bar"]
+        self.assertEqual(self.labels(menu_bar), ["File", "Edit", "View", "Help"])
+
+    def test_edit_menu_items(self):
+        self.assertEqual(self.labels(self.gui["edit_menu"]),
+                         ["Add Door...", "Edit Door...", "Delete Door", "Edit Project...", "Delete Project"])
+
+    def test_add_door_from_menu(self):
+        self.gui["edit_menu"].invoke("Add Door...")
+        self.assertEqual(self.newest_window().title(), "Add Door")
+
+    def test_about_shows_version_and_save_file(self):
+        self.gui["help_menu"].invoke(f"About {self.gui['APP_NAME']}")
+        title, message = self.info[0]
+        self.assertEqual(title, "About TrackerApp")
+        self.assertIn("version " + self.gui["APP_VERSION"], message)
+        self.assertIn(str(storage.PROJECTS_FILE), message)
+
+    def test_keyboard_shortcuts_lists_ctrl_n(self):
+        self.gui["help_menu"].invoke("Keyboard Shortcuts")
+        title, message = self.info[0]
+        self.assertEqual(title, "Keyboard Shortcuts")
+        self.assertIn("Ctrl+N", message)
+
+    def test_dark_mode_tick_follows_theme(self):
+        self.assertFalse(self.gui["dark_mode_on"].get())
+        self.gui["view_menu"].invoke("Dark Mode")
+        self.assertTrue(self.gui["dark_mode_on"].get())
+        self.assertEqual(self.gui["sv_ttk"].get_theme(), "dark")
+        # The button on the summary row switches back, and the tick follows.
+        self.gui["theme_button"].invoke()
+        self.assertFalse(self.gui["dark_mode_on"].get())
+
+    def test_window_title_uses_app_name(self):
+        self.assertEqual(self.gui["window"].title(), "TrackerApp - Test Project")
+
+
+# ---------------------------------------------------------------------------
 # Keyboard shortcuts (Enter, Escape, Delete, Ctrl+N)
 # ---------------------------------------------------------------------------
 class TestGuiShortcuts(GuiTestBase):

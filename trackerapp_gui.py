@@ -38,6 +38,11 @@ import report
 # We write storage.project_list, storage.save_projects(), and so on.
 import storage
 
+# The app's name and version number, shown in the window title and the
+# About box. Raise the version when you release a new set of changes.
+APP_NAME = "TrackerApp"
+APP_VERSION = "1.0"
+
 # The text color for each status, in light mode and in dark mode. These are
 # hex color codes (#RRGGBB). Dark mode uses brighter colors, because the
 # darker ones are hard to read on a dark background.
@@ -793,7 +798,7 @@ def show_project(project):
     # that only exists inside this function.
     global current_project
     current_project = project
-    window.title(f"TrackerApp - {project.name}")
+    window.title(f"{APP_NAME} - {project.name}")
     refresh_project_choices()
     # Clear the search and filter, so the new project starts with every door
     # showing. (Each .set() also redraws the table, through filter_changed.)
@@ -940,6 +945,8 @@ def apply_theme(theme):
     # Each mode has its own status colors (see STATUS_COLORS at the top).
     for status, color in STATUS_COLORS[theme].items():
         tree.tag_configure(status, foreground=color)
+    # Tick or untick "Dark Mode" in the View menu to match.
+    dark_mode_on.set(theme == "dark")
     # The button offers the OTHER mode.
     if theme == "dark":
         theme_button.config(text="Light mode")
@@ -956,6 +963,31 @@ def toggle_theme():
         new_theme = "dark"
     apply_theme(new_theme)
     storage.save_setting("theme", new_theme)
+
+
+# Runs when Help > About is clicked: a pop-up with the app's name, version,
+# and where the data is saved (handy when backing it up or moving computers).
+def show_about():
+    messagebox.showinfo(f"About {APP_NAME}",
+                        f"{APP_NAME}  version {APP_VERSION}\n\n"
+                        f"Tracks the install progress of doors and their devices "
+                        f"on access control projects.\n\n"
+                        f"Your projects are saved in:\n{storage.PROJECTS_FILE}",
+                        parent=window)
+
+
+# Runs when Help > Keyboard Shortcuts is clicked: list every shortcut.
+def show_shortcuts():
+    messagebox.showinfo("Keyboard Shortcuts",
+                        "Ctrl+N\tAdd a door\n"
+                        "Enter\tEdit the selected door\n"
+                        "Delete\tDelete the selected door\n"
+                        "Ctrl+F\tJump to the search box\n"
+                        "Ctrl+Q\tQuit\n\n"
+                        "In pop-up windows:\n"
+                        "Enter\tAdd / save what you typed\n"
+                        "Escape\tClose the window",
+                        parent=window)
 
 
 ##########################################################################
@@ -976,8 +1008,54 @@ if len(storage.project_list) == 0:
 
 # Create the main window.
 window = tk.Tk()
-window.title("TrackerApp")
+window.title(APP_NAME)
 window.geometry("560x680")   # width x height in pixels (wide enough for the project row)
+
+# --- The menu bar along the top of the window: File, Edit, View, Help ---
+# A tk.Menu given to window.config(menu=...) becomes the menu bar. Each
+# drop-down (File, Edit...) is another Menu, added with add_cascade().
+# accelerator= only SHOWS the shortcut next to the item; the keys themselves
+# are bound further down with window.bind() / tree.bind().
+# tearoff=False removes the dashed "tear off" line at the top of each menu.
+menu_bar = tk.Menu(window, tearoff=False)
+window.config(menu=menu_bar)
+
+file_menu = tk.Menu(menu_bar, tearoff=False)
+file_menu.add_command(label="New Project...", command=new_project)
+file_menu.add_separator()   # a thin line between groups of items
+file_menu.add_command(label="Export Text Report...", command=export_text)
+file_menu.add_command(label="Export PDF Report...", command=export_pdf)
+file_menu.add_separator()
+# window.destroy closes the main window, which ends the app.
+file_menu.add_command(label="Quit", accelerator="Ctrl+Q", command=window.destroy)
+menu_bar.add_cascade(label="File", menu=file_menu)
+
+edit_menu = tk.Menu(menu_bar, tearoff=False)
+edit_menu.add_command(label="Add Door...", accelerator="Ctrl+N", command=open_add_door)
+edit_menu.add_command(label="Edit Door...", accelerator="Enter", command=open_edit_door)
+edit_menu.add_command(label="Delete Door", accelerator="Delete", command=remove_selected_door)
+edit_menu.add_separator()
+edit_menu.add_command(label="Edit Project...", command=edit_project)
+edit_menu.add_command(label="Delete Project", command=delete_project)
+menu_bar.add_cascade(label="Edit", menu=edit_menu)
+
+view_menu = tk.Menu(menu_bar, tearoff=False)
+# A BooleanVar holds True or False. The checkbutton shows a tick when it's
+# True. apply_theme() keeps it matching the current light/dark mode.
+dark_mode_on = tk.BooleanVar(value=False)
+view_menu.add_checkbutton(label="Dark Mode", variable=dark_mode_on, command=toggle_theme)
+# search_entry isn't made until further down, so a lambda is used: it only
+# looks up search_entry when the item is clicked, by which time it exists.
+view_menu.add_command(label="Find", accelerator="Ctrl+F", command=lambda: search_entry.focus_set())
+menu_bar.add_cascade(label="View", menu=view_menu)
+
+help_menu = tk.Menu(menu_bar, tearoff=False)
+help_menu.add_command(label="Keyboard Shortcuts", command=show_shortcuts)
+help_menu.add_command(label=f"About {APP_NAME}", command=show_about)
+menu_bar.add_cascade(label="Help", menu=help_menu)
+
+# Ctrl+Q quits, like most programs.
+window.bind("<Control-q>", lambda event: window.destroy())
 
 # The status bar along the very bottom of the window. It shows what was
 # done last and when it was saved, like "Added Stair 2 — saved at 3:42 PM".
