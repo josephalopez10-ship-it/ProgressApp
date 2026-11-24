@@ -21,6 +21,7 @@ import tkinter as tk
 from tkinter import ttk, messagebox, filedialog
 
 from door import Door
+from project import Project
 import trackerapp_2 as data
 
 
@@ -82,6 +83,60 @@ class TestFindDevice(unittest.TestCase):
     def test_missing_device(self):
         # assertIsNone means "the test fails unless the result is None".
         self.assertIsNone(self.door.find_device("REX"))
+
+
+# ---------------------------------------------------------------------------
+# The Project class: a job's details and its doors
+# ---------------------------------------------------------------------------
+class TestProject(unittest.TestCase):
+
+    def test_only_name_is_required(self):
+        project = Project("Westfield Mall")
+        self.assertEqual(project.name, "Westfield Mall")
+        self.assertEqual(project.job_number, "")
+        self.assertEqual(project.address, "")
+        self.assertEqual(project.customer, "")
+        self.assertEqual(project.doors, [])
+
+    def test_projects_do_not_share_doors(self):
+        # Adding a door to one project must not add it to another project.
+        project_a = Project("A")
+        project_b = Project("B")
+        project_a.doors.append(Door("Main Entrance"))
+        self.assertEqual(project_b.doors, [])
+
+    def test_find_door_ignores_case_and_spaces(self):
+        project = Project("Test", doors=[Door("Main Entrance"), Door("Loading Dock")])
+        self.assertEqual(project.find_door("  main ENTRANCE ").name, "Main Entrance")
+        self.assertIsNone(project.find_door("Roof Hatch"))
+
+    def test_same_door_name_in_two_projects(self):
+        # find_door only looks inside its own project.
+        mall = Project("Mall", doors=[Door("Main Entrance", {"Lock": "C"})])
+        hospital = Project("Hospital", doors=[Door("Main Entrance", {"Lock": "P"})])
+        self.assertEqual(mall.find_door("Main Entrance").devices, {"Lock": "C"})
+        self.assertEqual(hospital.find_door("Main Entrance").devices, {"Lock": "P"})
+
+    def test_save_and_load_keeps_everything(self):
+        project = Project("Westfield Mall", job_number="24-117", address="1200 Main St",
+                          customer="Acme Builders",
+                          doors=[Door("Main Entrance", {"Card Reader": "C", "Lock": "P"}),
+                                 Door("Roof Hatch")])
+        # Turn it into a dictionary and back, the way saving and loading will.
+        copy = Project.from_dict(project.to_dict())
+
+        self.assertEqual(copy.to_dict(), project.to_dict())
+        self.assertEqual(copy.job_number, "24-117")
+        self.assertEqual(copy.doors[0].devices, {"Card Reader": "C", "Lock": "P"})
+        # The doors come back as real Door objects, so status() still works.
+        self.assertEqual(copy.doors[0].status(), "P")
+
+    def test_load_without_optional_details(self):
+        # A saved project with only a name and doors still loads.
+        copy = Project.from_dict({"name": "Old Job", "doors": []})
+        self.assertEqual(copy.name, "Old Job")
+        self.assertEqual(copy.job_number, "")
+        self.assertEqual(copy.customer, "")
 
 
 # ---------------------------------------------------------------------------
