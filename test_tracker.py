@@ -657,13 +657,14 @@ class TestGuiSummary(GuiTestBase):
 
 
 # ---------------------------------------------------------------------------
-# The Export PDF button
+# The Export Report button
 # ---------------------------------------------------------------------------
 class TestGuiExport(GuiTestBase):
 
     SAVED_DOORS = [
         {"name": "Main Entrance", "devices": {"Card Reader": "C", "REX": "N"}},
         {"name": "Loading Dock", "devices": {"Restraint": "R"}},
+        {"name": "Roof Hatch", "devices": {}},
     ]
 
     def setUp(self):
@@ -688,18 +689,48 @@ class TestGuiExport(GuiTestBase):
         self.assertEqual(self.info_messages, [])
         self.assertEqual(self.errors, [])
 
-    def test_export_makes_a_pdf(self):
-        pdf_path = Path(self.temp_folder.name) / "report.pdf"
-        self.save_as_answer = str(pdf_path)
+    # Helper: export to a file in the temporary folder and return its lines.
+    def export_and_read(self):
+        report_path = Path(self.temp_folder.name) / "report.txt"
+        self.save_as_answer = str(report_path)
         self.gui["export_report"]()
-
         self.assertEqual(self.errors, [])
-        self.assertEqual(self.info_messages, [f"Report saved to:\n{pdf_path}"])
-        # Every PDF file starts with the characters "%PDF".
-        self.assertTrue(pdf_path.read_bytes().startswith(b"%PDF"))
+        self.assertEqual(self.info_messages, [f"Report saved to:\n{report_path}"])
+        # splitlines() splits the text into a list, one item per line.
+        return report_path.read_text(encoding="utf-8").splitlines()
+
+    def test_export_has_title_and_summary(self):
+        lines = self.export_and_read()
+        self.assertEqual(lines[0], "DOOR PROGRESS REPORT")
+        self.assertTrue(lines[1].startswith("Created "))
+        # The summary from the top of the window is copied in.
+        self.assertIn("3 doors: 1 complete, 1 pending, 1 restrained", lines)
+        self.assertIn("Devices: 1 of 2 complete (50%)", lines)
+
+    def test_export_lists_every_door_and_device(self):
+        lines = self.export_and_read()
+        # Door lines: the name on the left, status in capitals at the right edge.
+        self.assertIn("Main Entrance" + " " * 39 + "COMPLETE", lines)
+        self.assertIn("Loading Dock" + " " * 38 + "RESTRAINED", lines)
+        self.assertIn("Roof Hatch" + " " * 43 + "PENDING", lines)
+        # Device lines: indented 4 spaces, status written out in full.
+        self.assertIn("    Card Reader" + " " * 37 + "Complete", lines)
+        self.assertIn("    REX" + " " * 50 + "N/a", lines)
+        self.assertIn("    Restraint" + " " * 37 + "Restrained", lines)
+        self.assertIn("    (no devices yet)", lines)
+
+    def test_statuses_line_up(self):
+        lines = self.export_and_read()
+        # Every door and device line ends exactly at the right edge (60 characters).
+        status_lines = [line for line in lines
+                        if line.endswith(("COMPLETE", "PENDING", "RESTRAINED",
+                                          "Complete", "Pending", "Restrained", "N/a"))]
+        self.assertEqual(len(status_lines), 6)
+        for line in status_lines:
+            self.assertEqual(len(line), 60, line)
 
     def test_folder_that_does_not_exist_shows_error(self):
-        self.save_as_answer = str(Path(self.temp_folder.name) / "no_such_folder" / "report.pdf")
+        self.save_as_answer = str(Path(self.temp_folder.name) / "no_such_folder" / "report.txt")
         self.gui["export_report"]()
         self.assertEqual(len(self.errors), 1)
         self.assertTrue(self.errors[0].startswith("The report could not be saved"))
