@@ -14,6 +14,8 @@ import unittest
 # tempfile makes temporary folders that are cleaned up automatically.
 import tempfile
 import json
+# date is used to check the suggested report file names.
+from datetime import date
 from pathlib import Path
 import tkinter as tk
 from tkinter import ttk, messagebox, filedialog
@@ -657,7 +659,7 @@ class TestGuiSummary(GuiTestBase):
 
 
 # ---------------------------------------------------------------------------
-# The Export Report button
+# The Export menu (text file and PDF)
 # ---------------------------------------------------------------------------
 class TestGuiExport(GuiTestBase):
 
@@ -672,9 +674,17 @@ class TestGuiExport(GuiTestBase):
         # Replace the "Save as" window and the "Report saved" pop-up, so the
         # tests don't stop and wait for clicks. self.save_as_answer is the
         # path the fake "Save as" window gives back ("" means Cancel).
+        # self.save_as_options remembers what the app asked the "Save as"
+        # window to show, like the suggested file name.
         self.save_as_answer = ""
+        self.save_as_options = {}
         self.real_asksaveasfilename = filedialog.asksaveasfilename
-        filedialog.asksaveasfilename = lambda **options: self.save_as_answer
+
+        def fake_save_as(**options):
+            self.save_as_options = options
+            return self.save_as_answer
+
+        filedialog.asksaveasfilename = fake_save_as
         self.info_messages = []
         self.real_showinfo = messagebox.showinfo
         messagebox.showinfo = lambda title, message, **options: self.info_messages.append(message)
@@ -684,16 +694,29 @@ class TestGuiExport(GuiTestBase):
         messagebox.showinfo = self.real_showinfo
         super().tearDown()
 
+    def test_menu_has_both_formats(self):
+        menu = self.gui["export_menu"]
+        # index("end") is the number of the last item, so +1 is how many there are.
+        labels = [menu.entrycget(i, "label") for i in range(menu.index("end") + 1)]
+        self.assertEqual(labels, ["Text file (.txt)", "PDF (.pdf)"])
+
     def test_cancel_saves_nothing(self):
-        self.gui["export_report"]()
+        self.gui["export_text"]()
+        self.gui["export_pdf"]()
         self.assertEqual(self.info_messages, [])
         self.assertEqual(self.errors, [])
+
+    def test_suggested_file_names(self):
+        self.gui["export_text"]()
+        self.assertEqual(self.save_as_options["initialfile"], f"door_report_{date.today()}.txt")
+        self.gui["export_pdf"]()
+        self.assertEqual(self.save_as_options["initialfile"], f"door_report_{date.today()}.pdf")
 
     # Helper: export to a file in the temporary folder and return its lines.
     def export_and_read(self):
         report_path = Path(self.temp_folder.name) / "report.txt"
         self.save_as_answer = str(report_path)
-        self.gui["export_report"]()
+        self.gui["export_text"]()
         self.assertEqual(self.errors, [])
         self.assertEqual(self.info_messages, [f"Report saved to:\n{report_path}"])
         # splitlines() splits the text into a list, one item per line.
@@ -731,10 +754,24 @@ class TestGuiExport(GuiTestBase):
 
     def test_folder_that_does_not_exist_shows_error(self):
         self.save_as_answer = str(Path(self.temp_folder.name) / "no_such_folder" / "report.txt")
-        self.gui["export_report"]()
-        self.assertEqual(len(self.errors), 1)
-        self.assertTrue(self.errors[0].startswith("The report could not be saved"))
+        self.gui["export_text"]()
+        self.save_as_answer = str(Path(self.temp_folder.name) / "no_such_folder" / "report.pdf")
+        self.gui["export_pdf"]()
+        # One error for each format, and nothing saved.
+        self.assertEqual(len(self.errors), 2)
+        for error in self.errors:
+            self.assertTrue(error.startswith("The report could not be saved"))
         self.assertEqual(self.info_messages, [])
+
+    def test_export_pdf_makes_a_pdf(self):
+        pdf_path = Path(self.temp_folder.name) / "report.pdf"
+        self.save_as_answer = str(pdf_path)
+        self.gui["export_pdf"]()
+
+        self.assertEqual(self.errors, [])
+        self.assertEqual(self.info_messages, [f"Report saved to:\n{pdf_path}"])
+        # Every PDF file starts with the characters "%PDF".
+        self.assertTrue(pdf_path.read_bytes().startswith(b"%PDF"))
 
 
 # This lets you also run the file directly: .venv/bin/python test_tracker.py

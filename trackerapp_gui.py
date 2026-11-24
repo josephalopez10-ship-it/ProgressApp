@@ -464,15 +464,23 @@ def remove_selected_door():
     confirm_and_delete_door(door, window)
 
 
-# Save a text report of every door. Runs when Export Report is clicked.
-def export_report():
+# Save a report of every door.
+# file_type is "txt" for a text file or "pdf" for a PDF.
+# Called by export_text() and export_pdf() below, so the "Save as" and error
+# handling steps are only written once for both formats.
+def export_report(file_type):
+    if file_type == "pdf":
+        description = "PDF files"
+    else:
+        description = "Text files"
+
     # Open a "Save as" window. It gives back the chosen file path, or nothing
     # if the user clicks Cancel. date.today() puts today's date in the
     # suggested name, like door_report_2026-11-23.txt
     file_path = filedialog.asksaveasfilename(parent=window, title="Save report as",
-                                             defaultextension=".txt",
-                                             filetypes=[("Text files", "*.txt")],
-                                             initialfile=f"door_report_{date.today()}.txt")
+                                             defaultextension=f".{file_type}",
+                                             filetypes=[(description, f"*.{file_type}")],
+                                             initialfile=f"door_report_{date.today()}.{file_type}")
     # "not file_path" is True when it's empty, meaning Cancel was clicked.
     if not file_path:
         return
@@ -480,13 +488,28 @@ def export_report():
     # try/except catches errors, like saving to a folder you're not allowed
     # to write in, and shows a pop-up instead of crashing.
     try:
-        report.make_text_report(data.door_list, file_path, summary_label.cget("text"))
+        if file_type == "pdf":
+            report.make_pdf_report(data.door_list, file_path, summary_label.cget("text"))
+        else:
+            report.make_text_report(data.door_list, file_path, summary_label.cget("text"))
     except OSError as error:
         messagebox.showerror("Could not save", f"The report could not be saved:\n{error}")
         return
 
     # showinfo is a pop-up with just an OK button.
     messagebox.showinfo("Report saved", f"Report saved to:\n{file_path}")
+
+
+# Run when "Text file" is picked from the Export menu.
+# A menu item's command can't pass anything to the function it runs, so these
+# two small functions each call export_report() with the right file type.
+def export_text():
+    export_report("txt")
+
+
+# Run when "PDF" is picked from the Export menu.
+def export_pdf():
+    export_report("pdf")
 
 
 ##########################################################################
@@ -512,7 +535,18 @@ button_frame.pack(side="bottom", fill="x", padx=10, pady=(0, 10))
 tk.Button(button_frame, text="Add Door", command=open_add_door).pack(side="left")
 # padx=(10, 0) puts 10 pixels of space on the left of the button, none on the right.
 tk.Button(button_frame, text="Edit Door", command=open_edit_door).pack(side="left", padx=(10, 0))
-tk.Button(button_frame, text="Export Report", command=export_report).pack(side="left", padx=(10, 0))
+# The Export button opens a small drop-down menu to pick the report format.
+# A Menubutton is a button that shows a Menu when clicked.
+# relief="raised" makes it look like the other buttons.
+export_button = tk.Menubutton(button_frame, text="Export ▾", relief="raised")
+# tearoff=False removes a dashed line tkinter normally puts at the top of
+# menus (clicking it would pop the menu out into its own little window).
+export_menu = tk.Menu(export_button, tearoff=False)
+export_menu.add_command(label="Text file (.txt)", command=export_text)
+export_menu.add_command(label="PDF (.pdf)", command=export_pdf)
+# Connect the menu to the button.
+export_button.config(menu=export_menu)
+export_button.pack(side="left", padx=(10, 0))
 # side="right" puts Remove Door on the far right, away from Add and Edit,
 # so it's harder to click by accident.
 tk.Button(button_frame, text="Remove Door", command=remove_selected_door).pack(side="right")
