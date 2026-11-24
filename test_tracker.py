@@ -1451,6 +1451,59 @@ class TestGuiSort(GuiTestBase):
 
 
 # ---------------------------------------------------------------------------
+# The status bar along the bottom of the window
+# ---------------------------------------------------------------------------
+class TestGuiStatusBar(GuiTestBase):
+
+    def status(self):
+        return self.gui["status_label"].cget("text")
+
+    def test_starts_as_ready(self):
+        self.assertEqual(self.status(), "Ready")
+
+    def test_save_changes_shows_message_and_time(self):
+        self.gui["save_changes"]("Added Stair 2")
+        # The time changes every minute, so only check the start, and that
+        # it ends with AM or PM.
+        self.assertTrue(self.status().startswith("Added Stair 2 — saved at "))
+        self.assertTrue(self.status().endswith(("AM", "PM")))
+
+    def test_deleting_a_door_updates_status(self):
+        tree = self.gui["tree"]
+        tree.selection_set(tree.get_children()[0])
+        self.gui["remove_selected_door"]()
+        self.assertTrue(self.status().startswith("Deleted Joes Door — saved at "))
+
+    def test_failed_save_warns_instead_of_crashing(self):
+        # Make saving fail, like a full disk would.
+        def broken_save():
+            raise OSError("disk full")
+        real_save = storage.save_projects
+        storage.save_projects = broken_save
+        try:
+            self.gui["save_changes"]("Added Stair 2")
+        finally:
+            storage.save_projects = real_save
+        self.assertEqual(self.status(), "NOT SAVED: Added Stair 2")
+        self.assertEqual(len(self.errors), 1)
+        self.assertIn("disk full", self.errors[0])
+
+    def test_edit_window_set_status_message(self):
+        tree = self.gui["tree"]
+        tree.selection_set(tree.get_children()[0])
+        self.gui["open_edit_door"]()
+        edit_window = self.newest_window()
+        widgets = edit_window.winfo_children()
+        listbox = [w for w in widgets if isinstance(w, tk.Listbox)][0]
+        status_box = [w for w in widgets if isinstance(w, ttk.Combobox)][0]
+        buttons = {w.cget("text"): w for w in widgets if isinstance(w, ttk.Button)}
+        listbox.selection_set(0)
+        status_box.set("C")
+        buttons["Set Status"].invoke()
+        self.assertTrue(self.status().startswith("Joes Door: Lock set to Complete — saved at "))
+
+
+# ---------------------------------------------------------------------------
 # Keyboard shortcuts (Enter, Escape, Delete, Ctrl+N)
 # ---------------------------------------------------------------------------
 class TestGuiShortcuts(GuiTestBase):

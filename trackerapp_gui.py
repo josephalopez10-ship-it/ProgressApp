@@ -24,7 +24,9 @@ from tkinter import messagebox
 # filedialog opens the standard "Save as" window to pick where to save a file.
 from tkinter import filedialog
 # date gives today's date, used in the report's file name.
-from datetime import date
+# datetime gives the date AND time, used for "saved at 3:42 PM" in the
+# status bar.
+from datetime import date, datetime
 # The Door class, to create new doors, the list of allowed status letters,
 # and STATUS_NAMES, which turns a letter into a word ("C" -> "Complete").
 from door import Door, VALID_STATUSES, STATUS_NAMES
@@ -81,6 +83,31 @@ COLUMN_TITLES = {"#0": "Door / Device", "devices": "Devices", "status": "Status"
 # The order doors go in when sorted by Status: problems first, so restrained
 # doors are at the top, then pending, then complete.
 STATUS_SORT_ORDER = {"R": 0, "P": 1, "C": 2}
+
+
+# Show a short message in the status bar along the bottom of the window,
+# like "Added Stair 2 — saved at 3:42 PM".
+def set_status(message):
+    status_label.config(text=message)
+
+
+# Save every project to projects.json, then say what was done in the status
+# bar. message describes the change, like "Added Stair 2".
+# Every change in the app saves through this one function, so the status bar
+# always shows the last save, and a failed save is always reported.
+def save_changes(message):
+    # try/except: if the file can't be written (disk full, no permission...),
+    # show a pop-up instead of crashing, and warn in the status bar.
+    try:
+        storage.save_projects()
+    except OSError as error:
+        messagebox.showerror("Could not save", f"Your changes could not be saved:\n{error}")
+        set_status(f"NOT SAVED: {message}")
+        return
+    # strftime() turns a time into text. %I = hour (01-12), %M = minutes,
+    # %p = AM or PM. lstrip("0") removes a leading zero: "03:42 PM" -> "3:42 PM".
+    time_text = datetime.now().strftime("%I:%M %p").lstrip("0")
+    set_status(f"{message} — saved at {time_text}")
 
 
 # Clear the table and fill it again from the current project's doors.
@@ -429,7 +456,7 @@ def open_add_door():
         new_door.name = name
         current_project.doors.append(new_door)
         # Save to projects.json so the door is kept after the app closes.
-        storage.save_projects()
+        save_changes(f"Added {name}")
         # Redraw the main table so the new door shows up.
         refresh_tree()
         # Close the Add Door window.
@@ -514,8 +541,9 @@ def open_edit_door():
 
     # Run after every change: save to projects.json, then redraw the main
     # table and this window's device list so both show the change.
-    def changes_made():
-        storage.save_projects()
+    # message says what changed, for the status bar, like "Added REX to Lobby".
+    def changes_made(message):
+        save_changes(message)
         refresh_tree()
         refresh_devices()
 
@@ -534,10 +562,12 @@ def open_edit_door():
             messagebox.showerror("Duplicate door", f"{new_name} already exists.", parent=edit_window)
             return
 
+        # Keep the old name for the status bar message.
+        old_name = door.name
         door.name = new_name
         # Update the window title to show the new name.
         edit_window.title(f"Edit Door - {door.name}")
-        changes_made()
+        changes_made(f"Renamed {old_name} to {new_name}")
 
     ttk.Button(edit_window, text="Rename", command=rename_door).grid(row=0, column=2, padx=10, pady=5)
 
@@ -553,8 +583,10 @@ def open_edit_door():
         if device_name is None:
             return
 
-        door.devices[device_name] = status_box.get()
-        changes_made()
+        new_status = status_box.get()
+        door.devices[device_name] = new_status
+        # .get(x, x) falls back to the letter itself if it isn't in STATUS_NAMES.
+        changes_made(f"{door.name}: {device_name} set to {STATUS_NAMES.get(new_status, new_status)}")
 
     ttk.Button(edit_window, text="Set Status", command=set_status).grid(row=2, column=2, padx=10, pady=5)
 
@@ -582,7 +614,7 @@ def open_edit_door():
         if messagebox.askyesno("Delete Device", f"Delete {device_name} from {door.name}?", parent=edit_window):
             # del removes this device and its status from the dictionary.
             del door.devices[device_name]
-            changes_made()
+            changes_made(f"Deleted {device_name} from {door.name}")
 
     ttk.Button(edit_window, text="Delete Device", command=delete_device).grid(row=3, column=2, padx=10, pady=5)
 
@@ -613,7 +645,7 @@ def open_edit_door():
         door.devices[device_name] = new_status_box.get()
         # Empty the box, ready for the next device.
         new_device_entry.delete(0, "end")
-        changes_made()
+        changes_made(f"Added {device_name} to {door.name}")
 
     ttk.Button(edit_window, text="Add Device", command=add_device).grid(row=5, column=2, padx=10, pady=5)
 
@@ -658,7 +690,7 @@ def confirm_and_delete_door(door, parent):
                            icon="warning", parent=parent):
         current_project.doors.remove(door)
         # Save so the door is also gone from projects.json.
-        storage.save_projects()
+        save_changes(f"Deleted {door.name}")
         refresh_tree()
         return True
     return False
@@ -726,6 +758,7 @@ def export_report(file_type):
 
     # showinfo is a pop-up with just an OK button.
     messagebox.showinfo("Report saved", f"Report saved to:\n{file_path}")
+    set_status(f"Report saved to {file_path}")
 
 
 # Run when "Text file" is picked from the Export menu.
@@ -846,7 +879,10 @@ def open_project_window(project=None):
         for attribute in ["job_number", "address", "customer"]:
             setattr(saved_project, attribute, entries[attribute].get().strip())
 
-        storage.save_projects()
+        if project is None:
+            save_changes(f"Created project {name}")
+        else:
+            save_changes(f"Updated project {name}")
         # Switch to the new or edited project. This also updates the title and
         # the dropdown, so a new name shows up straight away.
         show_project(saved_project)
@@ -885,8 +921,10 @@ def delete_project():
     if messagebox.askyesno("Delete project",
                            f"Delete the project {current_project.name} and all {door_count} of its doors?\nThis can't be undone.",
                            icon="warning", parent=window):
+        # Keep the name for the status bar message, before it's removed.
+        deleted_name = current_project.name
         storage.project_list.remove(current_project)
-        storage.save_projects()
+        save_changes(f"Deleted project {deleted_name}")
         # The current project is gone, so switch to the first one left.
         show_project(storage.project_list[0])
 
@@ -940,6 +978,14 @@ if len(storage.project_list) == 0:
 window = tk.Tk()
 window.title("TrackerApp")
 window.geometry("560x680")   # width x height in pixels (wide enough for the project row)
+
+# The status bar along the very bottom of the window. It shows what was
+# done last and when it was saved, like "Added Stair 2 — saved at 3:42 PM".
+# It's packed side="bottom" BEFORE the buttons, so it sits below them.
+status_label = ttk.Label(window, text="Ready", anchor="w")
+status_label.pack(side="bottom", fill="x", padx=10, pady=(0, 6))
+# A thin line between the buttons and the status bar.
+ttk.Separator(window, orient="horizontal").pack(side="bottom", fill="x", pady=(0, 4))
 
 # A row along the bottom of the window to hold the buttons.
 # side="bottom" keeps the buttons visible even if the window is made smaller.
