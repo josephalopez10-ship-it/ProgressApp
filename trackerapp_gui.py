@@ -178,6 +178,14 @@ def setup_popup(popup):
     popup.wait_visibility()
     # grab_set() stops clicks on the main window until this one is closed.
     popup.grab_set()
+    # Add 10 pixels of empty space around the inside edge of the pop-up, on
+    # top of each widget's own padx/pady, so nothing sits right against the
+    # window's border. A tk.Toplevel can do this itself with padx/pady.
+    popup.configure(padx=10, pady=10)
+    # resizable(False, False) stops the window being stretched wider (the
+    # first False) or taller (the second). These forms are laid out to fit
+    # their contents exactly, so stretching them only adds empty space.
+    popup.resizable(False, False)
     # Pressing Escape closes the pop-up, the same as Cancel or Close.
     # bind() runs a function when a key is pressed, and hands it an "event"
     # with details about the key press. destroy() doesn't take an event, so

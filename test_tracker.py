@@ -1295,6 +1295,21 @@ class TestGuiShortcuts(GuiTestBase):
         tree.selection_set(tree.get_children()[0])
         return tree
 
+    def test_popups_have_padding_and_fixed_size(self):
+        # Check all three pop-ups: Add Door, Edit Door, and New Project.
+        self.gui["open_add_door"]()
+        self.select_joes_door()
+        self.gui["open_edit_door"]()
+        self.gui["new_project"]()
+        window = self.gui["window"]
+        popups = [w for w in window.winfo_children() if isinstance(w, tk.Toplevel)]
+        self.assertEqual(len(popups), 3)
+        for popup in popups:
+            self.assertEqual(str(popup.cget("padx")), "10")
+            self.assertEqual(str(popup.cget("pady")), "10")
+            # resizable() with nothing passed in tells you the current setting.
+            self.assertEqual(popup.resizable(), (False, False))
+
     def test_escape_closes_add_door_window(self):
         self.gui["open_add_door"]()
         add_window = self.newest_window()
