@@ -606,14 +606,19 @@ class TestGuiEditDoor(GuiTestBase):
         self.click_device(edit, "Lock")
         self.assertEqual(edit["status"].get(), "P")
 
+    # Helper: pick a status from the Edit window's dropdown, the way a real
+    # pick does: the value changes, then <<ComboboxSelected>> is sent.
+    def pick_status(self, edit, status):
+        edit["status"].set(status)
+        edit["status"].event_generate("<<ComboboxSelected>>")
+        edit["window"].update()
+
     def test_set_status_updates_table_and_file(self):
         edit = self.open_edit_window("Joes Door")
         self.click_device(edit, "Lock")
-        edit["status"].set("C")
-        edit["buttons"]["Set Status"].invoke()
+        self.pick_status(edit, "C")
         self.click_device(edit, "REX")
-        edit["status"].set("C")
-        edit["buttons"]["Set Status"].invoke()
+        self.pick_status(edit, "C")
 
         self.assertEqual(self.errors, [])
         # All devices are C now, so the door turns C.
@@ -624,20 +629,23 @@ class TestGuiEditDoor(GuiTestBase):
         edit = self.open_edit_window("Joes Door")
         self.click_device(edit, "Lock")
         # Picking from the real dropdown also highlights its text. That used to
-        # unselect the device in the list, so Set Status failed.
+        # unselect the device in the list, so setting the status failed.
         edit["status"].set("C")
         edit["status"].selection_range(0, "end")
         edit["window"].update()
-        edit["buttons"]["Set Status"].invoke()
+        edit["status"].event_generate("<<ComboboxSelected>>")
 
         self.assertEqual(self.errors, [])
         self.assertEqual(self.doors()[0].devices["Lock"], "C")
+        # The device is still selected afterwards, ready for another change.
+        self.assertEqual(edit["devices"].get(edit["devices"].curselection()[0]), "Lock   Complete")
 
     def test_set_status_with_no_device_selected(self):
         edit = self.open_edit_window("Joes Door")
-        edit["status"].set("C")
-        edit["buttons"]["Set Status"].invoke()
+        self.pick_status(edit, "C")
         self.assertEqual(self.errors, ["Click a device in the list first."])
+        # The dropdown is emptied again, since nothing was changed.
+        self.assertEqual(edit["status"].get(), "")
 
     def test_add_device(self):
         edit = self.open_edit_window("Joes Door")
@@ -1574,7 +1582,7 @@ class TestGuiStatusBar(GuiTestBase):
         buttons = {w.cget("text"): w for w in widgets if isinstance(w, ttk.Button)}
         listbox.selection_set(0)
         status_box.set("C")
-        buttons["Set Status"].invoke()
+        status_box.event_generate("<<ComboboxSelected>>")
         self.assertTrue(self.status().startswith("Joes Door: Lock set to Complete — saved at "))
 
 
@@ -1605,7 +1613,7 @@ class TestGuiMenuBar(GuiTestBase):
 
     def test_edit_menu_items(self):
         self.assertEqual(self.labels(self.app.edit_menu),
-                         ["Add Door...", "Edit Door...", "Delete Door", "Edit Project...", "Delete Project"])
+                         ["Add Door...", "Edit Door...", "Delete Door", "Set Status", "Edit Project...", "Delete Project"])
 
     def test_add_door_from_menu(self):
         self.app.edit_menu.invoke("Add Door...")
@@ -1996,6 +2004,125 @@ class TestGuiImportPrints(GuiTestBase):
         self.app.import_prints()
         self.assertEqual(self.errors, ["No door schedules were found in this PDF."])
         self.assertEqual(self.app.window.cget("cursor"), "")
+
+
+# ---------------------------------------------------------------------------
+# Setting statuses straight from the table: C/P/R/N keys, right-click menu
+# ---------------------------------------------------------------------------
+class TestGuiQuickStatus(GuiTestBase):
+
+    SAVED_DOORS = [
+        {"name": "Lobby", "devices": {"Card Reader": "P", "Lock": "R", "REX": "N"}},
+        {"name": "Stair 2", "devices": {"Card Reader": "P", "Door Contact": "P"}},
+    ]
+
+    # Helper: the table row for a door, or for one of its devices.
+    def row(self, door_name, device_name=None):
+        tree = self.app.tree
+        for door_row in tree.get_children():
+            if tree.item(door_row, "text") == door_name:
+                if device_name is None:
+                    return door_row
+                for device_row in tree.get_children(door_row):
+                    if tree.item(device_row, "text") == device_name:
+                        return device_row
+
+    # Helper: press a key on the table, like a real key press.
+    def press(self, key):
+        tree = self.app.tree
+        tree.focus_force()
+        tree.update()
+        tree.event_generate(key)
+        tree.update()
+
+    def devices(self, door_index):
+        return self.doors()[door_index].devices
+
+    def test_key_sets_a_device(self):
+        self.app.tree.selection_set(self.row("Lobby", "Card Reader"))
+        self.press("<Key-c>")
+        self.assertEqual(self.devices(0)["Card Reader"], "C")
+        # Saved to the file too.
+        self.assertEqual(self.saved_file()[0]["devices"]["Card Reader"], "C")
+        self.assertTrue(self.app.status_label.cget("text").startswith("Set 1 device to Complete"))
+
+    def test_capital_letter_works_too(self):
+        self.app.tree.selection_set(self.row("Lobby", "Card Reader"))
+        self.press("<Key-R>")
+        self.assertEqual(self.devices(0)["Card Reader"], "R")
+
+    def test_several_devices_at_once(self):
+        tree = self.app.tree
+        tree.selection_set([self.row("Lobby", "Card Reader"), self.row("Stair 2", "Door Contact")])
+        self.press("<Key-c>")
+        self.assertEqual(self.devices(0)["Card Reader"], "C")
+        self.assertEqual(self.devices(1)["Door Contact"], "C")
+        self.assertEqual(self.devices(1)["Card Reader"], "P")
+        self.assertTrue(self.app.status_label.cget("text").startswith("Set 2 devices to Complete"))
+
+    def test_door_row_sets_all_its_devices_but_not_na(self):
+        self.app.tree.selection_set(self.row("Lobby"))
+        self.press("<Key-c>")
+        self.assertEqual(self.devices(0), {"Card Reader": "C", "Lock": "C", "REX": "N"})
+        # The other door isn't touched.
+        self.assertEqual(self.devices(1), {"Card Reader": "P", "Door Contact": "P"})
+
+    def test_picking_na_for_a_door_changes_everything(self):
+        self.app.tree.selection_set(self.row("Stair 2"))
+        self.app.set_selected_status("N")
+        self.assertEqual(self.devices(1), {"Card Reader": "N", "Door Contact": "N"})
+
+    def test_selection_stays_after_the_change(self):
+        tree = self.app.tree
+        tree.selection_set([self.row("Lobby", "Card Reader"), self.row("Stair 2")])
+        self.press("<Key-c>")
+        selected = [(tree.item(tree.parent(row), "text") if tree.parent(row) else None, tree.item(row, "text"))
+                    for row in tree.selection()]
+        self.assertEqual(sorted(selected, key=str), sorted([("Lobby", "Card Reader"), (None, "Stair 2")], key=str))
+
+    def test_nothing_selected_shows_error(self):
+        self.press("<Key-c>")
+        self.assertEqual(self.errors, ["Click a door or device in the list first."])
+
+    def test_no_change_saves_nothing(self):
+        self.app.tree.selection_set(self.row("Lobby", "Lock"))
+        self.press("<Key-r>")
+        self.assertEqual(self.app.status_label.cget("text"), "Already Restrained")
+
+    def test_status_menu_items(self):
+        menu = self.app.status_menu
+        labels = [menu.entrycget(i, "label") for i in range(menu.index("end") + 1)]
+        self.assertEqual(labels, ["Complete", "Pending", "Restrained", "N/a"])
+        # Each item sets its own status.
+        self.app.tree.selection_set(self.row("Stair 2", "Card Reader"))
+        menu.invoke("Restrained")
+        self.assertEqual(self.devices(1)["Card Reader"], "R")
+
+    def test_edit_menu_has_set_status(self):
+        menu = self.app.edit_menu
+        labels = [menu.entrycget(i, "label") for i in range(menu.index("end") + 1)
+                  if menu.type(i) not in ("separator", "tearoff")]
+        self.assertIn("Set Status", labels)
+
+    def test_right_click_selects_the_row(self):
+        tree = self.app.tree
+        # Show the menu without waiting for a click on it.
+        self.app.status_menu.tk_popup = lambda x, y: None
+        tree.update()
+        row = self.row("Stair 2", "Door Contact")
+        x, y, width, height = tree.bbox(row)
+        tree.event_generate("<Button-3>", x=x + 20, y=y + height // 2)
+        self.assertEqual(tree.selection(), (row,))
+
+    def test_right_click_keeps_a_multi_selection(self):
+        tree = self.app.tree
+        self.app.status_menu.tk_popup = lambda x, y: None
+        rows = (self.row("Lobby", "Card Reader"), self.row("Stair 2", "Door Contact"))
+        tree.selection_set(rows)
+        tree.update()
+        x, y, width, height = tree.bbox(rows[1])
+        tree.event_generate("<Button-3>", x=x + 20, y=y + height // 2)
+        self.assertEqual(set(tree.selection()), set(rows))
 
 
 # ---------------------------------------------------------------------------

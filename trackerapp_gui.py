@@ -327,6 +327,10 @@ class TrackerApp:
         self.edit_menu.add_command(label="Add Door...", accelerator="Ctrl+N", command=self.open_add_door)
         self.edit_menu.add_command(label="Edit Door...", accelerator="Enter", command=self.open_edit_door)
         self.edit_menu.add_command(label="Delete Door", accelerator="Delete", command=self.remove_selected_door)
+        # A menu inside a menu (a "submenu"): Edit > Set Status > Complete...
+        # It's the same menu that opens when a row is right-clicked.
+        self.status_menu = self.make_status_menu(self.edit_menu)
+        self.edit_menu.add_cascade(label="Set Status", menu=self.status_menu)
         self.edit_menu.add_separator()
         self.edit_menu.add_command(label="Edit Project...", command=self.edit_project)
         self.edit_menu.add_command(label="Delete Project", command=self.delete_project)
@@ -478,6 +482,9 @@ class TrackerApp:
         # A single click on the empty space below the last row unselects
         # whatever was selected. "<Button-1>" is a click with the left button.
         self.tree.bind("<Button-1>", self.table_clicked)
+        # A right-click ("<Button-3>", the right mouse button) opens a menu to
+        # set the status of the clicked row.
+        self.tree.bind("<Button-3>", self.table_right_clicked)
 
     # Keyboard shortcuts for the main window:
     #   Enter   -> edit the selected door (like double-clicking it)
@@ -485,6 +492,7 @@ class TrackerApp:
     #   Ctrl+N  -> add a new door
     #   Ctrl+F  -> jump to the search box
     #   Ctrl+Q  -> quit
+    #   C P R N -> set the status of the selected doors / devices
     # Enter and Delete are bound to the table, so they only work when the
     # table has the focus (after clicking a row). The Ctrl shortcuts are
     # bound to the whole main window. Pop-ups are separate windows, so they
@@ -493,6 +501,13 @@ class TrackerApp:
     # These methods don't take one, so "lambda event: ..." makes a tiny
     # one-line function that accepts the event, ignores it, and calls them.
     def bind_shortcuts(self):
+        # C, P, R or N sets the status of the selected rows. Both lowercase
+        # and capital letters work (Caps Lock on or off).
+        # "letter=letter" is needed in a loop: it makes each lambda remember
+        # ITS letter. Without it, all four would use the last one, "N".
+        for letter in VALID_STATUSES:
+            self.tree.bind(f"<Key-{letter.lower()}>", lambda event, letter=letter: self.set_selected_status(letter))
+            self.tree.bind(f"<Key-{letter}>", lambda event, letter=letter: self.set_selected_status(letter))
         self.tree.bind("<Return>", lambda event: self.open_edit_door())
         self.tree.bind("<Delete>", lambda event: self.remove_selected_door())
         self.window.bind("<Control-n>", lambda event: self.open_add_door())
@@ -538,22 +553,17 @@ class TrackerApp:
     # always matches the saved data.
     def refresh_tree(self):
         # Remember what's selected, so it can be selected again after the
-        # redraw. Without this, sorting, searching or editing a door would
+        # redraw. Without this, sorting, searching or changing a status would
         # unselect it, because every row is deleted and made again.
-        # selected_door / selected_device are names, or None.
-        selected_door = None
-        selected_device = None
-        selection = self.tree.selection()
-        if len(selection) > 0:
-            row = selection[0]
+        # Each selected row is remembered by names, as a (door, device) pair.
+        # A door row has None for the device: ("Lobby", None).
+        selected = set()
+        for row in self.tree.selection():
             parent = self.tree.parent(row)
             if parent == "":
-                # A door row.
-                selected_door = self.tree.item(row, "text")
+                selected.add((self.tree.item(row, "text"), None))
             else:
-                # A device row: remember its door too.
-                selected_door = self.tree.item(parent, "text")
-                selected_device = self.tree.item(row, "text")
+                selected.add((self.tree.item(parent, "text"), self.tree.item(row, "text")))
 
         # Remove every row currently in the table.
         for row in self.tree.get_children():
@@ -597,8 +607,10 @@ class TrackerApp:
                                         tags=(status, "door"), open=True)
 
             # Select this door again if it was selected before the redraw.
-            if door.name == selected_door and selected_device is None:
-                self.tree.selection_set(door_row)
+            # selection_add() adds to the selection (selection_set() would
+            # replace it), so several rows can be selected again.
+            if (door.name, None) in selected:
+                self.tree.selection_add(door_row)
 
             # Add each device as a row underneath its door (door_row is the
             # parent). A device row leaves the Devices column empty ("").
@@ -606,8 +618,8 @@ class TrackerApp:
                 device_row = self.tree.insert(door_row, "end", text=device_name,
                                               values=("", STATUS_NAMES[device_status]), tags=(device_status,))
                 # Select this device again if it was selected before.
-                if door.name == selected_door and device_name == selected_device:
-                    self.tree.selection_set(device_row)
+                if (door.name, device_name) in selected:
+                    self.tree.selection_add(device_row)
 
         # Tell the user when some doors are hidden, so an empty-looking table
         # isn't mistaken for missing doors. With no search or filter, blank.
@@ -750,6 +762,85 @@ class TrackerApp:
         self.summary_label.config(text=f"{len(doors)} doors: {counts['C']} complete, "
                                        f"{counts['P']} pending, {counts['R']} restrained\n"
                                        f"Devices: {devices_done} of {devices_total} complete ({percent}%)")
+
+    # -----------------------------------------------------------------------
+    # Changing device statuses from the table
+    # -----------------------------------------------------------------------
+
+    # Set the status of every selected row to status ("C", "P", "R" or "N").
+    #   A device row  -> that device.
+    #   A door row    -> all of the door's devices, except N/a ones (an N/a
+    #                    device isn't part of the job, so "Complete" mustn't
+    #                    turn it into C). Picking N/a itself changes them all.
+    # Several rows can be selected at once with Ctrl+click or Shift+click.
+    # Runs for the C/P/R/N keys, the right-click menu, and Edit > Set Status.
+    def set_selected_status(self, status):
+        rows = self.tree.selection()
+        if len(rows) == 0:
+            messagebox.showerror("Nothing selected", "Click a door or device in the list first.",
+                                 parent=self.window)
+            return
+
+        changed = 0
+        for row in rows:
+            parent = self.tree.parent(row)
+            if parent == "":
+                # A door row: change its devices.
+                door = self.current_project.find_door(self.tree.item(row, "text"))
+                for device_name, device_status in door.devices.items():
+                    if device_status == "N" and status != "N":
+                        continue
+                    if device_status != status:
+                        door.devices[device_name] = status
+                        changed += 1
+            else:
+                # A device row: the row's text is the device's exact name.
+                door = self.current_project.find_door(self.tree.item(parent, "text"))
+                device_name = self.tree.item(row, "text")
+                if door.devices[device_name] != status:
+                    door.devices[device_name] = status
+                    changed += 1
+
+        word = STATUS_NAMES[status]
+        if changed == 0:
+            # Nothing to save; just say so.
+            self.set_status(f"Already {word}")
+            return
+        # "device" or "devices", depending on how many.
+        if changed == 1:
+            self.save_changes(f"Set 1 device to {word}")
+        else:
+            self.save_changes(f"Set {changed} devices to {word}")
+        self.refresh_tree()
+
+    # Make the Complete / Pending / Restrained / N/a menu. parent is the
+    # menu it belongs to. Used twice: for the right-click menu, and for
+    # Edit > Set Status. accelerator= shows the key that does the same thing.
+    def make_status_menu(self, parent):
+        menu = tk.Menu(parent, tearoff=False)
+        for letter in VALID_STATUSES:
+            # "letter=letter" makes each item remember its own letter (see
+            # bind_shortcuts for why).
+            menu.add_command(label=STATUS_NAMES[letter], accelerator=letter,
+                             command=lambda letter=letter: self.set_selected_status(letter))
+        return menu
+
+    # Runs when a row is right-clicked: select it (unless it's already part
+    # of the selection, so a right-click on several selected rows keeps them
+    # all), then show the status menu at the mouse.
+    def table_right_clicked(self, event):
+        row = self.tree.identify_row(event.y)
+        if row == "":
+            return
+        if row not in self.tree.selection():
+            self.tree.selection_set(row)
+        # tk_popup() shows a menu at a spot on the screen. x_root / y_root are
+        # the mouse's position on the whole screen. grab_release() hands the
+        # mouse back to the window when the menu closes.
+        try:
+            self.status_menu.tk_popup(event.x_root, event.y_root)
+        finally:
+            self.status_menu.grab_release()
 
     # Find the door that's selected (clicked) in the table.
     # If a device row is selected, use the door it belongs to.
@@ -1004,8 +1095,8 @@ class TrackerApp:
         # exportselection=False keeps the clicked device selected while you
         # pick a status from the dropdown. Without it, tkinter only allows
         # one selection at a time, so picking from the dropdown would
-        # unselect the device and Set Status would say "Click a device in
-        # the list first."
+        # unselect the device and the status wouldn't know which device to
+        # change.
         device_listbox = tk.Listbox(edit_window, height=8, exportselection=False)
         device_listbox.grid(row=1, column=0, columnspan=3, sticky="we", padx=10, pady=5)
 
@@ -1065,23 +1156,30 @@ class TrackerApp:
 
         ttk.Button(edit_window, text="Rename", command=rename_door).grid(row=0, column=2, padx=10, pady=5)
 
-        # --- Row 2: status dropdown + Set Status button (selected device) ---
+        # --- Row 2: status dropdown for the selected device ---
+        # Picking a status sets it straight away; there's no button to click.
         ttk.Label(edit_window, text="Status:").grid(row=2, column=0, sticky="w", padx=10)
         status_box = ttk.Combobox(edit_window, values=VALID_STATUSES, width=4, state="readonly")
         status_box.grid(row=2, column=1, sticky="w", padx=10)
 
-        # Runs when Set Status is clicked: give the selected device the
-        # status picked in the dropdown.
-        def set_device_status():
+        # Runs when a status is picked from the dropdown: give the selected
+        # device that status. "event" is the pick; it isn't needed.
+        def set_device_status(event=None):
             device_name = get_selected_device()
             if device_name is None:
+                # Nothing to change, so empty the dropdown again.
+                status_box.set("")
                 return
+            # Remember which row is selected, to select it again after the
+            # list is refilled.
+            row_number = device_listbox.curselection()[0]
             new_status = status_box.get()
             door.devices[device_name] = new_status
-            # .get(x, x) falls back to the letter if it isn't in STATUS_NAMES.
-            changes_made(f"{door.name}: {device_name} set to {STATUS_NAMES.get(new_status, new_status)}")
+            changes_made(f"{door.name}: {device_name} set to {STATUS_NAMES[new_status]}")
+            device_listbox.selection_set(row_number)
 
-        ttk.Button(edit_window, text="Set Status", command=set_device_status).grid(row=2, column=2, padx=10, pady=5)
+        # "<<ComboboxSelected>>" is sent when the user picks a choice.
+        status_box.bind("<<ComboboxSelected>>", set_device_status)
 
         # When a device is clicked in the listbox, show its current status in
         # the dropdown, so the user can see it before changing it.
@@ -1559,6 +1657,9 @@ class TrackerApp:
                             "Ctrl+N\tAdd a door\n"
                             "Enter\tEdit the selected door\n"
                             "Delete\tDelete the selected door\n"
+                            "C P R N\tSet the selected doors / devices to\n"
+                            "\tComplete, Pending, Restrained or N/a\n"
+                            "\t(Ctrl+click or Shift+click to select several)\n"
                             "Ctrl+F\tJump to the search box\n"
                             "Ctrl+Q\tQuit\n\n"
                             "In pop-up windows:\n"
