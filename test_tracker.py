@@ -15,6 +15,9 @@ import unittest
 # tempfile makes temporary folders that are cleaned up automatically.
 import tempfile
 import json
+# shutil and subprocess are used to run the pdftotext tool in one PDF test.
+import shutil
+import subprocess
 # date is used to check the suggested report file names.
 from datetime import date
 from pathlib import Path
@@ -24,6 +27,7 @@ from tkinter import ttk, messagebox, filedialog
 from door import Door
 from project import Project
 import storage
+import report
 
 
 # Each class below is a group of related tests.
@@ -803,10 +807,20 @@ class TestGuiExport(GuiTestBase):
         self.assertEqual(self.errors, [])
 
     def test_suggested_file_names(self):
+        # The project is called "Test Project": the space becomes "_".
         self.gui["export_text"]()
-        self.assertEqual(self.save_as_options["initialfile"], f"door_report_{date.today()}.txt")
+        self.assertEqual(self.save_as_options["initialfile"], f"Test_Project_report_{date.today()}.txt")
         self.gui["export_pdf"]()
-        self.assertEqual(self.save_as_options["initialfile"], f"door_report_{date.today()}.pdf")
+        self.assertEqual(self.save_as_options["initialfile"], f"Test_Project_report_{date.today()}.pdf")
+
+    def test_safe_file_name(self):
+        safe_file_name = self.gui["safe_file_name"]
+        self.assertEqual(safe_file_name("Westfield Mall / Phase 2"), "Westfield_Mall___Phase_2")
+        self.assertEqual(safe_file_name("Job-24_117"), "Job-24_117")
+
+    def test_text_report_shows_project_name(self):
+        lines = self.export_and_read()
+        self.assertIn("Project:       Test Project", lines)
 
     # Helper: export to a file in the temporary folder and return its lines.
     def export_and_read(self):
@@ -868,6 +882,64 @@ class TestGuiExport(GuiTestBase):
         self.assertEqual(self.info_messages, [f"Report saved to:\n{pdf_path}"])
         # Every PDF file starts with the characters "%PDF".
         self.assertTrue(pdf_path.read_bytes().startswith(b"%PDF"))
+
+    def test_pdf_with_special_characters_in_details(self):
+        # & and < have special meanings in PDF Paragraph text. Without escape()
+        # in report.py, "<East>" silently disappears from the PDF.
+        # pdftotext is a small tool that reads the text out of a PDF. If this
+        # computer doesn't have it, the test is skipped instead of failing.
+        if shutil.which("pdftotext") is None:
+            self.skipTest("pdftotext isn't installed, so the PDF's text can't be read.")
+        self.gui["current_project"].customer = "Smith & Sons <East>"
+        pdf_path = Path(self.temp_folder.name) / "report.pdf"
+        self.save_as_answer = str(pdf_path)
+        self.gui["export_pdf"]()
+        self.assertEqual(self.errors, [])
+
+        # Run pdftotext and read its output. "-" means "print the text"
+        # instead of saving it to a file.
+        pdf_text = subprocess.run(["pdftotext", str(pdf_path), "-"],
+                                  capture_output=True, text=True).stdout
+        self.assertIn("Customer / GC: Smith & Sons <East>", pdf_text)
+        self.assertIn("Project: Test Project", pdf_text)
+
+
+# ---------------------------------------------------------------------------
+# report.py on its own: the project details at the top of the reports
+# ---------------------------------------------------------------------------
+class TestReportProjectDetails(unittest.TestCase):
+
+    def setUp(self):
+        self.temp_folder = tempfile.TemporaryDirectory()
+        self.report_path = Path(self.temp_folder.name) / "report.txt"
+
+    def tearDown(self):
+        self.temp_folder.cleanup()
+
+    # Helper: make a text report for this project and return its lines.
+    def text_report_lines(self, project):
+        report.make_text_report(project, self.report_path, "1 doors: ...")
+        return self.report_path.read_text(encoding="utf-8").splitlines()
+
+    def test_all_details_are_shown_lined_up(self):
+        project = Project("Westfield Mall", job_number="24-117", address="1200 Main St",
+                          customer="Acme Builders", doors=[Door("Main Entrance")])
+        lines = self.text_report_lines(project)
+        # Right after the title, the "Created" line and a blank line.
+        self.assertEqual(lines[3:7], ["Project:       Westfield Mall",
+                                      "Job number:    24-117",
+                                      "Address:       1200 Main St",
+                                      "Customer / GC: Acme Builders"])
+
+    def test_blank_details_are_skipped(self):
+        lines = self.text_report_lines(Project("City Hospital", customer="Skyline GC"))
+        self.assertIn("Project:       City Hospital", lines)
+        self.assertIn("Customer / GC: Skyline GC", lines)
+        self.assertFalse(any(line.startswith(("Job number:", "Address:")) for line in lines))
+
+    def test_project_details_list(self):
+        project = Project("Mall", job_number="", address="1 Main St")
+        self.assertEqual(report.project_details(project), [("Project", "Mall"), ("Address", "1 Main St")])
 
 
 # ---------------------------------------------------------------------------

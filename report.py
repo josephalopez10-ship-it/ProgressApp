@@ -7,13 +7,18 @@
 #                        Looks the same on every computer and prints nicely.
 # Kept in its own file so the GUI (or anything else) can use it:
 #   import report
-#   report.make_text_report(doors, "door_report.txt", summary_text)
-#   report.make_pdf_report(doors, "door_report.pdf", summary_text)
+#   report.make_text_report(project, "door_report.txt", summary_text)
+#   report.make_pdf_report(project, "door_report.pdf", summary_text)
 #
-# Example of what the report looks like:
+# Example of what the text report looks like:
 #
 #   DOOR PROGRESS REPORT
 #   Created November 23, 2026 at 02:50 PM
+#
+#   Project:       Westfield Mall
+#   Job number:    24-117
+#   Address:       1200 Main St
+#   Customer / GC: Acme Builders
 #
 #   3 doors: 2 complete, 0 pending, 1 restrained
 #   Devices: 10 of 11 complete (91%)
@@ -26,6 +31,8 @@
 
 # datetime gives today's date and time, to print on the report.
 from datetime import datetime
+# escape() makes text safe to put inside a PDF Paragraph (see make_pdf_report).
+from xml.sax.saxutils import escape
 # reportlab is the library that builds PDF files (installed with pip, and
 # listed in requirements.txt).
 # colors        = named colors like colors.green
@@ -50,16 +57,33 @@ STATUS_COLORS = {
     "R": colors.HexColor("#c62828"),   # red
 }
 
+# The project's details as a list of (label, value) pairs, for the top of
+# both reports. Details left blank are skipped, so a project with only a name
+# just shows its name.
+def project_details(project):
+    details = [
+        ("Project", project.name),
+        ("Job number", project.job_number),
+        ("Address", project.address),
+        ("Customer / GC", project.customer),
+    ]
+    filled_in = []
+    for label, value in details:
+        if value != "":
+            filled_in.append((label, value))
+    return filled_in
+
+
 # How many characters wide the text report is. 60 fits on a printed page and in
 # most email windows.
 WIDTH = 60
 
 
 # Build the text report and save it to file_path.
-#   doors        = the list of Door objects to put in the report
+#   project      = the Project to report on (its details and its doors)
 #   file_path    = where to save the file, for example "door_report.txt"
 #   summary_text = the totals to show near the top (the GUI's summary text)
-def make_text_report(doors, file_path, summary_text):
+def make_text_report(project, file_path, summary_text):
     # Build the report as a list of lines, then write them all at the end.
     lines = []
     lines.append("DOOR PROGRESS REPORT")
@@ -68,10 +92,15 @@ def make_text_report(doors, file_path, summary_text):
     lines.append(datetime.now().strftime("Created %B %d, %Y at %I:%M %p"))
     # An empty string makes a blank line.
     lines.append("")
+    # The project's details, one per line. label + ":" is padded to 15
+    # characters so all the values line up.
+    for label, value in project_details(project):
+        lines.append(f"{label + ':':<15}{value}")
+    lines.append("")
     lines.append(summary_text)
     lines.append("")
 
-    for door in doors:
+    for door in project.doors:
         # The door status in capitals, so it stands out from its devices.
         door_status = STATUS_NAMES[door.status()].upper()
         # "=" * WIDTH makes a line of 60 "=" characters.
@@ -100,10 +129,10 @@ def make_text_report(doors, file_path, summary_text):
 
 
 # Build the PDF and save it to file_path.
-#   doors        = the list of Door objects to put in the report
+#   project      = the Project to report on (its details and its doors)
 #   file_path    = where to save the PDF, for example "door_report.pdf"
 #   summary_text = the totals to show near the top (the GUI's summary text)
-def make_pdf_report(doors, file_path, summary_text):
+def make_pdf_report(project, file_path, summary_text):
     styles = getSampleStyleSheet()
 
     # The pieces of the page, top to bottom. We add to this list, then
@@ -114,6 +143,14 @@ def make_pdf_report(doors, file_path, summary_text):
     # %Y = year, %I:%M %p = time like 02:30 PM.
     story.append(Paragraph(datetime.now().strftime("Created %B %d, %Y at %I:%M %p"), styles["Normal"]))
     story.append(Spacer(1, 0.2 * inch))
+    # The project's details, one per line, with the label in bold.
+    # Paragraph text is a little like a web page: <b>...</b> means bold, and
+    # characters like & and < have special meanings. escape() turns them into
+    # safe codes, so a customer like "Smith & Sons" prints correctly instead
+    # of causing an error.
+    for label, value in project_details(project):
+        story.append(Paragraph(f"<b>{label}:</b> {escape(value)}", styles["Normal"]))
+    story.append(Spacer(1, 0.1 * inch))
     # Paragraph text uses <br/> instead of "\n" for a new line.
     story.append(Paragraph(summary_text.replace("\n", "<br/>"), styles["Heading3"]))
     story.append(Spacer(1, 0.2 * inch))
@@ -132,7 +169,7 @@ def make_pdf_report(doors, file_path, summary_text):
         ("VALIGN", (0, 0), (-1, -1), "MIDDLE"),
     ]
 
-    for door in doors:
+    for door in project.doors:
         door_status = door.status()
         # The door's own row: its name and overall status, in bold on light grey.
         rows.append([door.name, "", STATUS_NAMES[door_status]])
@@ -163,5 +200,5 @@ def make_pdf_report(doors, file_path, summary_text):
     document = SimpleDocTemplate(file_path, pagesize=letter,
                                  leftMargin=0.75 * inch, rightMargin=0.75 * inch,
                                  topMargin=0.75 * inch, bottomMargin=0.75 * inch,
-                                 title="Door Progress Report")
+                                 title=f"Door Progress Report - {project.name}")
     document.build(story)

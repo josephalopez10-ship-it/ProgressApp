@@ -471,11 +471,30 @@ def remove_selected_door():
     confirm_and_delete_door(door, window)
 
 
+# Turn a project name into something safe to use in a file name.
+# Letters, numbers, - and _ are kept; anything else (spaces, /, :, and so on)
+# becomes _ , because some characters aren't allowed in file names.
+# Example: "Westfield Mall / Phase 2" -> "Westfield_Mall___Phase_2"
+def safe_file_name(text):
+    safe = ""
+    for character in text:
+        # isalnum() is True for letters and numbers.
+        if character.isalnum() or character in "-_":
+            safe += character
+        else:
+            safe += "_"
+    return safe
+
+
 # Save a report of every door.
 # file_type is "txt" for a text file or "pdf" for a PDF.
 # Called by export_text() and export_pdf() below, so the "Save as" and error
 # handling steps are only written once for both formats.
 def export_report(file_type):
+    # Start the suggested file name with the project's name, so reports for
+    # different jobs don't get mixed up.
+    name_start = safe_file_name(current_project.name)
+
     if file_type == "pdf":
         description = "PDF files"
     else:
@@ -483,11 +502,11 @@ def export_report(file_type):
 
     # Open a "Save as" window. It gives back the chosen file path, or nothing
     # if the user clicks Cancel. date.today() puts today's date in the
-    # suggested name, like door_report_2026-11-23.txt
+    # suggested name, like Westfield_Mall_report_2026-11-23.txt
     file_path = filedialog.asksaveasfilename(parent=window, title="Save report as",
                                              defaultextension=f".{file_type}",
                                              filetypes=[(description, f"*.{file_type}")],
-                                             initialfile=f"door_report_{date.today()}.{file_type}")
+                                             initialfile=f"{name_start}_report_{date.today()}.{file_type}")
     # "not file_path" is True when it's empty, meaning Cancel was clicked.
     if not file_path:
         return
@@ -496,9 +515,9 @@ def export_report(file_type):
     # to write in, and shows a pop-up instead of crashing.
     try:
         if file_type == "pdf":
-            report.make_pdf_report(current_project.doors, file_path, summary_label.cget("text"))
+            report.make_pdf_report(current_project, file_path, summary_label.cget("text"))
         else:
-            report.make_text_report(current_project.doors, file_path, summary_label.cget("text"))
+            report.make_text_report(current_project, file_path, summary_label.cget("text"))
     except OSError as error:
         messagebox.showerror("Could not save", f"The report could not be saved:\n{error}")
         return
