@@ -31,6 +31,7 @@ from door import Door
 from project import Project
 import storage
 import report
+import install_launcher
 
 
 # Each class below is a group of related tests.
@@ -842,11 +843,13 @@ class TestGuiExport(GuiTestBase):
         messagebox.showinfo = self.real_showinfo
         super().tearDown()
 
-    def test_menu_has_both_formats(self):
-        menu = self.gui["export_menu"]
+    def test_file_menu_has_both_formats(self):
+        menu = self.gui["file_menu"]
         # index("end") is the number of the last item, so +1 is how many there are.
-        labels = [menu.entrycget(i, "label") for i in range(menu.index("end") + 1)]
-        self.assertEqual(labels, ["Text file (.txt)", "PDF (.pdf)"])
+        labels = [menu.entrycget(i, "label") for i in range(menu.index("end") + 1)
+                  if menu.type(i) == "command"]
+        self.assertIn("Export Text Report...", labels)
+        self.assertIn("Export PDF Report...", labels)
 
     def test_cancel_saves_nothing(self):
         self.gui["export_text"]()
@@ -1233,13 +1236,13 @@ class TestGuiTheme(GuiTestBase):
 
     def test_first_run_is_light(self):
         self.assertEqual(self.gui["sv_ttk"].get_theme(), "light")
-        self.assertEqual(self.gui["theme_button"].cget("text"), "Dark mode")
+        self.assertFalse(self.gui["dark_mode_on"].get())
         self.assertEqual(self.tag_color("C"), "#2e7d32")
 
     def test_toggle_to_dark_and_back(self):
         self.gui["toggle_theme"]()
         self.assertEqual(self.gui["sv_ttk"].get_theme(), "dark")
-        self.assertEqual(self.gui["theme_button"].cget("text"), "Light mode")
+        self.assertTrue(self.gui["dark_mode_on"].get())
         # Brighter status colors in dark mode.
         self.assertEqual(self.tag_color("C"), "#66bb6a")
         self.assertEqual(self.tag_color("R"), "#ef5350")
@@ -1264,7 +1267,7 @@ class TestGuiStartsDark(GuiTestBase):
 
     def test_starts_in_dark_mode(self):
         self.assertEqual(self.gui["sv_ttk"].get_theme(), "dark")
-        self.assertEqual(self.gui["theme_button"].cget("text"), "Light mode")
+        self.assertTrue(self.gui["dark_mode_on"].get())
 
     def test_popup_and_device_list_are_dark(self):
         # The Edit door window: its background and its device list must be
@@ -1557,9 +1560,10 @@ class TestGuiMenuBar(GuiTestBase):
         self.gui["view_menu"].invoke("Dark Mode")
         self.assertTrue(self.gui["dark_mode_on"].get())
         self.assertEqual(self.gui["sv_ttk"].get_theme(), "dark")
-        # The button on the summary row switches back, and the tick follows.
-        self.gui["theme_button"].invoke()
+        # Clicking it again switches back, and the tick follows.
+        self.gui["view_menu"].invoke("Dark Mode")
         self.assertFalse(self.gui["dark_mode_on"].get())
+        self.assertEqual(self.gui["sv_ttk"].get_theme(), "light")
 
     def test_window_title_uses_app_name(self):
         self.assertEqual(self.gui["window"].title(), "TrackerApp - Test Project")
@@ -1675,6 +1679,43 @@ class TestGuiErrors(GuiTestBase):
             button.invoke()
         self.assertEqual(len(self.errors), 1)
         self.assertIn("division by zero", self.errors[0])
+
+
+# ---------------------------------------------------------------------------
+# The apps-menu launcher (install_launcher.py)
+# ---------------------------------------------------------------------------
+class TestLauncher(unittest.TestCase):
+
+    def entry_lines(self):
+        text = install_launcher.make_desktop_entry("/home/me/My Apps/.venv/bin/python",
+                                                   Path("/home/me/My Apps/ProgressApp"))
+        return text.splitlines()
+
+    def test_starts_the_gui_with_the_given_python(self):
+        self.assertIn('Exec="/home/me/My Apps/.venv/bin/python" "/home/me/My Apps/ProgressApp/trackerapp_gui.py"',
+                      self.entry_lines())
+
+    def test_uses_the_app_icon_and_no_terminal(self):
+        lines = self.entry_lines()
+        self.assertIn("Icon=/home/me/My Apps/ProgressApp/icon.png", lines)
+        self.assertIn("Terminal=false", lines)
+
+    def test_window_class_matches_the_gui(self):
+        # StartupWMClass must match className= in trackerapp_gui.py.
+        gui_code = Path("trackerapp_gui.py").read_text(encoding="utf-8")
+        self.assertIn('APP_NAME = "TrackerApp"', gui_code)
+        self.assertIn("tk.Tk(className=APP_NAME)", gui_code)
+        self.assertIn("StartupWMClass=TrackerApp", self.entry_lines())
+
+    def test_entry_passes_the_desktop_file_checker(self):
+        # desktop-file-validate is the official checker for .desktop files.
+        if shutil.which("desktop-file-validate") is None:
+            self.skipTest("desktop-file-validate isn't installed.")
+        with tempfile.TemporaryDirectory() as folder:
+            entry_file = Path(folder) / "trackerapp.desktop"
+            entry_file.write_text("\n".join(self.entry_lines()) + "\n", encoding="utf-8")
+            result = subprocess.run(["desktop-file-validate", str(entry_file)], capture_output=True, text=True)
+        self.assertEqual(result.stdout + result.stderr, "")
 
 
 # ---------------------------------------------------------------------------

@@ -770,14 +770,14 @@ def export_report(file_type):
     set_status(f"Report saved to {file_path}")
 
 
-# Run when "Text file" is picked from the Export menu.
+# Runs when File > Export Text Report is clicked.
 # A menu item's command can't pass anything to the function it runs, so these
 # two small functions each call export_report() with the right file type.
 def export_text():
     export_report("txt")
 
 
-# Run when "PDF" is picked from the Export menu.
+# Runs when File > Export PDF Report is clicked.
 def export_pdf():
     export_report("pdf")
 
@@ -951,15 +951,10 @@ def apply_theme(theme):
         tree.tag_configure(status, foreground=color)
     # Tick or untick "Dark Mode" in the View menu to match.
     dark_mode_on.set(theme == "dark")
-    # The button offers the OTHER mode.
-    if theme == "dark":
-        theme_button.config(text="Light mode")
-    else:
-        theme_button.config(text="Dark mode")
 
 
-# Runs when the Light mode / Dark mode button is clicked: switch to the
-# other mode, and remember it for next time.
+# Runs when View > Dark Mode is clicked: switch to the other mode, and
+# remember it for next time.
 def toggle_theme():
     if sv_ttk.get_theme() == "dark":
         new_theme = "light"
@@ -1202,21 +1197,7 @@ ttk.Button(button_frame, text="Add Door", command=open_add_door, style="Accent.T
 
 # padx=(10, 0) puts 10 pixels of space on the left of the button, none on the right.
 ttk.Button(button_frame, text="Edit Door", command=open_edit_door).pack(side="left", padx=(10, 0))
-
-# The Export button opens a small drop-down menu to pick the report format.
-# A Menubutton is a button that shows a Menu when clicked. The theme draws
-# the little arrow itself.
-export_button = ttk.Menubutton(button_frame, text="Export")
-
-# tearoff=False removes a dashed line tkinter normally puts at the top of
-# menus (clicking it would pop the menu out into its own little window).
-export_menu = tk.Menu(export_button, tearoff=False)
-export_menu.add_command(label="Text file (.txt)", command=export_text)
-export_menu.add_command(label="PDF (.pdf)", command=export_pdf)
-
-# Connect the menu to the button.
-export_button.config(menu=export_menu)
-export_button.pack(side="left", padx=(10, 0))
+# (Exporting a report and dark mode are in the File and View menus.)
 
 # side="right" puts Delete Door on the far right, away from Add and Edit,
 # so it's harder to click by accident.
@@ -1241,16 +1222,9 @@ project_box.bind("<<ComboboxSelected>>", project_chosen)
 # font=(name, size, "bold") makes it bigger and bold so it stands out.
 # justify="left" lines up both lines of text on the left.
 # It must be packed BEFORE the table below, or it would end up under it.
-# The summary and the Light/Dark mode button share one row, in a Frame:
-# the summary on the left, the button on the right.
-summary_frame = ttk.Frame(window)
-summary_frame.pack(side="top", fill="x", padx=10, pady=(10, 0))
-summary_label = ttk.Label(summary_frame, text="", font=("TkDefaultFont", 11, "bold"), justify="left")
-summary_label.pack(side="left")
-# The button's text ("Dark mode" or "Light mode") is set by apply_theme().
-theme_button = ttk.Button(summary_frame, command=toggle_theme)
-# anchor="n" keeps it at the top of the row, level with the summary's first line.
-theme_button.pack(side="right", anchor="n")
+# anchor="w" keeps it on the left (w = west).
+summary_label = ttk.Label(window, text="", font=("TkDefaultFont", 11, "bold"), justify="left")
+summary_label.pack(side="top", anchor="w", padx=10, pady=(10, 0))
 
 # A progress bar under the summary that fills up as devices are completed,
 # so you can see how far along the project is at a glance.
