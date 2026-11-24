@@ -786,22 +786,25 @@ class TrackerApp:
     # Pop-up windows for doors
     # -----------------------------------------------------------------------
 
-    # Get a new pop-up window (Add Door, Edit Door, or a project window)
-    # ready. All three pop-ups need the same steps, so they're written once.
+    # Opening a pop-up (Add Door, Edit Door, or a project window) takes two
+    # steps, shared by all three:
+    #   setup_popup(popup) - right after making it: hide it while its boxes
+    #                        and buttons are added, and set it up.
+    #   show_popup(popup)  - once everything is added: center it over the
+    #                        main window and show it.
+    # It's hidden in between because its size isn't known until everything
+    # is in it, and the size is needed to center it.
+
+    # Step 1: get a new pop-up ready, hidden.
     def setup_popup(self, popup):
+        # withdraw() hides the window until show_popup() shows it again, so
+        # it doesn't flash up in the wrong place first.
+        popup.withdraw()
         # (No colors needed here: sv_ttk colors every window and list to
         # match light or dark mode by itself.)
         # transient(window) tells the desktop this window belongs to the
         # main window, so it always stays in front of it.
         popup.transient(self.window)
-        # Wait until the window is actually on screen before grab_set().
-        # A double-click opens the Edit window while the mouse is still busy
-        # with the second click, so it appears a moment later than usual.
-        # Without this wait, grab_set() fails with "grab failed: window not
-        # viewable".
-        popup.wait_visibility()
-        # grab_set() stops clicks on the main window until this one closes.
-        popup.grab_set()
         # Add 10 pixels of empty space around the inside edge of the pop-up,
         # on top of each widget's own padx/pady, so nothing sits right
         # against the border. A tk.Toplevel can do this itself.
@@ -813,13 +816,47 @@ class TrackerApp:
         # Pressing Escape closes the pop-up, the same as Cancel or Close.
         popup.bind("<Escape>", lambda event: popup.destroy())
 
+    # Step 2: center the finished pop-up over the main window and show it.
+    def show_popup(self, popup):
+        # update_idletasks() makes tkinter work out the pop-up's size now
+        # that everything is in it. winfo_reqwidth/reqheight are that size.
+        popup.update_idletasks()
+        popup_width = popup.winfo_reqwidth()
+        popup_height = popup.winfo_reqheight()
+        # The main window's position on screen (rootx/rooty = its top-left
+        # corner) and its size.
+        main_x = self.window.winfo_rootx()
+        main_y = self.window.winfo_rooty()
+        main_width = self.window.winfo_width()
+        main_height = self.window.winfo_height()
+        # Centered = the same amount of space on both sides. // divides and
+        # drops the remainder, since pixels are whole numbers.
+        x = main_x + (main_width - popup_width) // 2
+        y = main_y + (main_height - popup_height) // 2
+        # Never off the top or left edge of the screen. max() gives back the
+        # bigger number, so a negative x or y becomes 0.
+        x = max(x, 0)
+        y = max(y, 0)
+        # "+x+y" moves the window without changing its size.
+        popup.geometry(f"+{x}+{y}")
+        # deiconify() shows the window again (the opposite of withdraw()).
+        popup.deiconify()
+        # Wait until the window is actually on screen before grab_set().
+        # A double-click opens the Edit window while the mouse is still busy
+        # with the second click, so it appears a moment later than usual.
+        # Without this wait, grab_set() fails with "grab failed: window not
+        # viewable".
+        popup.wait_visibility()
+        # grab_set() stops clicks on the main window until this one closes.
+        popup.grab_set()
+
     # Open the "Add Door" window. Runs for the Add Door button, Edit > Add
     # Door, and Ctrl+N.
     def open_add_door(self):
         # Toplevel = a second window that opens on top of the main one.
         add_window = tk.Toplevel(self.window)
         add_window.title("Add Door")
-        # Stay in front, block clicks on the main window, padding, Escape.
+        # Hidden while it's built; stay in front, padding, Escape.
         self.setup_popup(add_window)
 
         # Build the door with no name yet. Devices get added to it as the
@@ -919,6 +956,9 @@ class TrackerApp:
         # Cancel just closes the window. new_door was never added to the
         # project, so nothing is saved.
         ttk.Button(add_window, text="Cancel", command=add_window.destroy).grid(row=4, column=2, pady=10)
+
+        # Everything's in place: center the window over the app and show it.
+        self.show_popup(add_window)
 
     # Open the "Edit Door" window for the door selected in the table.
     # Runs for the Edit Door button, Edit > Edit Door, Enter, and a
@@ -1109,6 +1149,9 @@ class TrackerApp:
 
         # Fill the device list when the window first opens.
         refresh_devices()
+
+        # Everything's in place: center the window over the app and show it.
+        self.show_popup(edit_window)
 
     # Ask "are you sure?", then delete the door if Yes is clicked.
     # parent = the window the pop-up should appear on top of.
@@ -1315,6 +1358,9 @@ class TrackerApp:
                    style="Accent.TButton").grid(row=4, column=1, sticky="e", pady=10)
         ttk.Button(project_window, text="Cancel", command=project_window.destroy).grid(row=4, column=2,
                                                                                        padx=10, pady=10)
+
+        # Everything's in place: center the window over the app and show it.
+        self.show_popup(project_window)
 
     # Runs for the New button next to the dropdown, and File > New Project.
     def new_project(self):

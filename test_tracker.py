@@ -1826,6 +1826,25 @@ class TestGuiShortcuts(GuiTestBase):
             # resizable() with nothing passed in tells you the current setting.
             self.assertEqual(popup.resizable(), (False, False))
 
+    def test_popups_open_centered_on_the_main_window(self):
+        window = self.app.window
+        window.update()
+        main_center_x = window.winfo_rootx() + window.winfo_width() // 2
+        main_center_y = window.winfo_rooty() + window.winfo_height() // 2
+        self.select_joes_door()
+        # Check each pop-up, closing it before opening the next.
+        for open_popup in [self.app.open_add_door, self.app.open_edit_door, self.app.new_project]:
+            open_popup()
+            popup = self.newest_window()
+            popup.update()
+            popup_center_x = popup.winfo_rootx() + popup.winfo_width() // 2
+            popup_center_y = popup.winfo_rooty() + popup.winfo_height() // 2
+            # The desktop's title bar can shift it by a few pixels, so allow
+            # a little room: within 40 pixels of the exact center.
+            self.assertLess(abs(popup_center_x - main_center_x), 40, popup.title())
+            self.assertLess(abs(popup_center_y - main_center_y), 40, popup.title())
+            popup.destroy()
+
     def test_escape_closes_add_door_window(self):
         self.app.open_add_door()
         add_window = self.newest_window()
