@@ -396,6 +396,55 @@ class TestGuiAddDoor(GuiTestBase):
         self.assertEqual(tree.set(door_row, "status"), "Pending")
         self.assertEqual(tree.set(device_row, "status"), "Pending")
 
+    # Helper: a real left click on the table at (x, y), in pixels from
+    # the table's top-left corner.
+    def click_table(self, x, y):
+        tree = self.app.tree
+        tree.update()
+        tree.event_generate("<Button-1>", x=x, y=y)
+        tree.event_generate("<ButtonRelease-1>", x=x, y=y)
+        tree.update()
+
+    def test_clicking_empty_space_unselects(self):
+        tree = self.app.tree
+        tree.selection_set(tree.get_children()[0])
+        # Near the bottom of the table, well below the only door and device.
+        self.click_table(50, tree.winfo_height() - 10)
+        self.assertEqual(tree.selection(), ())
+
+    def test_clicking_a_row_still_selects_it(self):
+        tree = self.app.tree
+        tree.update()
+        door_row = tree.get_children()[0]
+        # bbox() gives the row's position: x, y, width, height.
+        x, y, width, height = tree.bbox(door_row)
+        self.click_table(x + 20, y + height // 2)
+        self.assertEqual(tree.selection(), (door_row,))
+
+    def test_clicking_a_heading_keeps_the_selection(self):
+        tree = self.app.tree
+        door_row = tree.get_children()[0]
+        tree.selection_set(door_row)
+        # y=10 is on the column headings. (Clicking one also sorts the
+        # table, which re-makes every row, so compare door names.)
+        self.click_table(50, 10)
+        self.assertEqual([tree.item(row, "text") for row in tree.selection()], ["Joes Door"])
+
+    def test_selection_survives_a_redraw(self):
+        tree = self.app.tree
+        # A selected door stays selected. Its row is a new one after the
+        # redraw, so compare names, not row ids.
+        tree.selection_set(tree.get_children()[0])
+        self.app.refresh_tree()
+        self.assertEqual(tree.item(tree.selection()[0], "text"), "Joes Door")
+        # A selected device stays selected too.
+        door_row = tree.get_children()[0]
+        tree.selection_set(tree.get_children(door_row)[0])
+        self.app.refresh_tree()
+        selected = tree.selection()[0]
+        self.assertEqual(tree.item(selected, "text"), "Lock")
+        self.assertEqual(tree.item(tree.parent(selected), "text"), "Joes Door")
+
     def test_door_rows_are_marked_as_doors(self):
         tree = self.app.tree
         door_row = tree.get_children()[0]

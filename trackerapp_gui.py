@@ -458,6 +458,9 @@ class TrackerApp:
         # window. "<Double-1>" means a double-click with mouse button 1 (the
         # left button).
         self.tree.bind("<Double-1>", self.row_double_clicked)
+        # A single click on the empty space below the last row unselects
+        # whatever was selected. "<Button-1>" is a click with the left button.
+        self.tree.bind("<Button-1>", self.table_clicked)
 
     # Keyboard shortcuts for the main window:
     #   Enter   -> edit the selected door (like double-clicking it)
@@ -517,6 +520,24 @@ class TrackerApp:
     # Call this whenever a door is added, edited, or removed, so the table
     # always matches the saved data.
     def refresh_tree(self):
+        # Remember what's selected, so it can be selected again after the
+        # redraw. Without this, sorting, searching or editing a door would
+        # unselect it, because every row is deleted and made again.
+        # selected_door / selected_device are names, or None.
+        selected_door = None
+        selected_device = None
+        selection = self.tree.selection()
+        if len(selection) > 0:
+            row = selection[0]
+            parent = self.tree.parent(row)
+            if parent == "":
+                # A door row.
+                selected_door = self.tree.item(row, "text")
+            else:
+                # A device row: remember its door too.
+                selected_door = self.tree.item(parent, "text")
+                selected_device = self.tree.item(row, "text")
+
         # Remove every row currently in the table.
         for row in self.tree.get_children():
             self.tree.delete(row)
@@ -558,11 +579,18 @@ class TrackerApp:
             door_row = self.tree.insert("", "end", text=door.name, values=(devices_text, STATUS_NAMES[status]),
                                         tags=(status, "door"), open=True)
 
+            # Select this door again if it was selected before the redraw.
+            if door.name == selected_door and selected_device is None:
+                self.tree.selection_set(door_row)
+
             # Add each device as a row underneath its door (door_row is the
             # parent). A device row leaves the Devices column empty ("").
             for device_name, device_status in door.devices.items():
-                self.tree.insert(door_row, "end", text=device_name, values=("", STATUS_NAMES[device_status]),
-                                 tags=(device_status,))
+                device_row = self.tree.insert(door_row, "end", text=device_name,
+                                              values=("", STATUS_NAMES[device_status]), tags=(device_status,))
+                # Select this device again if it was selected before.
+                if door.name == selected_door and device_name == selected_device:
+                    self.tree.selection_set(device_row)
 
         # Tell the user when some doors are hidden, so an empty-looking table
         # isn't mistaken for missing doors. With no search or filter, blank.
@@ -725,6 +753,18 @@ class TrackerApp:
 
         # The row's text is the door name, so look the door up by name.
         return self.current_project.find_door(self.tree.item(row, "text"))
+
+    # Runs on every single click in the table. If the click was on empty
+    # space (below the last row), unselect everything, so no door is picked.
+    # identify_region() says what part of the table is under the mouse:
+    # "nothing" for empty space ("heading", "cell" and "tree" are the
+    # headings and rows). Clicks on rows and headings are left alone, so
+    # they still select a row or sort the table as normal.
+    def table_clicked(self, event):
+        if self.tree.identify_region(event.x, event.y) == "nothing":
+            # selection_remove() unselects the rows it's given; selection()
+            # is every selected row.
+            self.tree.selection_remove(self.tree.selection())
 
     # Runs when a row in the table is double-clicked: open the Edit window
     # for it. "event" holds details about the click, like where the mouse
