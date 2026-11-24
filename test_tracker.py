@@ -23,6 +23,7 @@ from tkinter import ttk, messagebox, filedialog
 from door import Door
 from project import Project
 import trackerapp_2 as data
+import storage
 
 
 # Each class below is a group of related tests.
@@ -224,6 +225,107 @@ class TestSaveAndLoad(UsesTempSaveFile):
         self.write_save_file('[{"name": "X"}]')
         with self.assertRaises(SystemExit):
             data.load_doors()
+
+
+# ---------------------------------------------------------------------------
+# storage.py: saving and loading projects, and moving the old doors over.
+# Like UsesTempSaveFile, both save files are pointed at a temporary folder,
+# so the real projects.json and door_list.json are never touched.
+# ---------------------------------------------------------------------------
+class TestStorage(unittest.TestCase):
+
+    def setUp(self):
+        self.temp_folder = tempfile.TemporaryDirectory()
+        folder = Path(self.temp_folder.name)
+        # Remember the real paths so they can be put back afterward.
+        self.real_projects_file = storage.PROJECTS_FILE
+        self.real_old_doors_file = storage.OLD_DOORS_FILE
+        storage.PROJECTS_FILE = folder / "projects.json"
+        storage.OLD_DOORS_FILE = folder / "door_list.json"
+        storage.project_list.clear()
+
+    def tearDown(self):
+        storage.PROJECTS_FILE = self.real_projects_file
+        storage.OLD_DOORS_FILE = self.real_old_doors_file
+        storage.project_list.clear()
+        self.temp_folder.cleanup()
+
+    # Helper: write an old-style door_list.json in the temporary folder.
+    def write_old_doors(self, doors):
+        storage.OLD_DOORS_FILE.write_text(json.dumps(doors), encoding="utf-8")
+
+    def test_no_files_starts_empty(self):
+        storage.load_projects()
+        self.assertEqual(storage.project_list, [])
+        # Nothing to move, so no projects.json is made.
+        self.assertFalse(storage.PROJECTS_FILE.exists())
+
+    def test_old_doors_move_into_first_project(self):
+        old_doors = [{"name": "Joes Door", "devices": {"Lock": "C"}},
+                     {"name": "142.1", "devices": {"Lock": "R"}}]
+        self.write_old_doors(old_doors)
+        storage.load_projects()
+
+        self.assertEqual(len(storage.project_list), 1)
+        project = storage.project_list[0]
+        self.assertEqual(project.name, "My First Project")
+        self.assertEqual([door.name for door in project.doors], ["Joes Door", "142.1"])
+        self.assertEqual(project.doors[1].status(), "R")
+        # projects.json was saved, and door_list.json was left alone as a backup.
+        self.assertTrue(storage.PROJECTS_FILE.exists())
+        self.assertEqual(json.loads(storage.OLD_DOORS_FILE.read_text(encoding="utf-8")), old_doors)
+
+    def test_move_only_happens_once(self):
+        self.write_old_doors([{"name": "Joes Door", "devices": {}}])
+        storage.load_projects()
+        # Rename the project and save, like a user would.
+        storage.project_list[0].name = "Westfield Mall"
+        storage.save_projects()
+
+        # Start the app again: projects.json exists now, so the old doors must
+        # NOT be moved a second time.
+        storage.project_list.clear()
+        storage.load_projects()
+        self.assertEqual([p.name for p in storage.project_list], ["Westfield Mall"])
+
+    def test_save_then_load_keeps_everything(self):
+        storage.project_list.append(Project("Westfield Mall", job_number="24-117",
+                                            address="1200 Main St", customer="Acme Builders",
+                                            doors=[Door("Main Entrance", {"Lock": "P"})]))
+        storage.project_list.append(Project("City Hospital", doors=[Door("Main Entrance")]))
+        storage.save_projects()
+
+        storage.project_list.clear()
+        storage.load_projects()
+        self.assertEqual([p.name for p in storage.project_list], ["Westfield Mall", "City Hospital"])
+        self.assertEqual(storage.project_list[0].customer, "Acme Builders")
+        self.assertEqual(storage.project_list[0].doors[0].devices, {"Lock": "P"})
+
+    def test_find_project_ignores_case_and_spaces(self):
+        storage.project_list.append(Project("Westfield Mall"))
+        self.assertEqual(storage.find_project("  WESTFIELD mall ").name, "Westfield Mall")
+        self.assertIsNone(storage.find_project("City Hospital"))
+
+    def test_damaged_projects_file_stops_the_app_and_is_not_overwritten(self):
+        broken_text = '[{"name": "Westfield Mall", "doors": ['
+        storage.PROJECTS_FILE.write_text(broken_text, encoding="utf-8")
+        with self.assertRaises(SystemExit):
+            storage.load_projects()
+        self.assertEqual(storage.PROJECTS_FILE.read_text(encoding="utf-8"), broken_text)
+
+    def test_damaged_old_doors_file_stops_the_app(self):
+        storage.OLD_DOORS_FILE.write_text('[{"name": "X"}]', encoding="utf-8")
+        with self.assertRaises(SystemExit):
+            storage.load_projects()
+        # Nothing was moved, so no projects.json was made.
+        self.assertFalse(storage.PROJECTS_FILE.exists())
+
+    def test_projects_file_is_ignored_by_git(self):
+        # The save file's name must match a line in .gitignore, so real job
+        # data is never committed (a typo like "project.json" would break this).
+        # Check the REAL file name, not the temporary one setUp swapped in.
+        gitignore_lines = Path(".gitignore").read_text(encoding="utf-8").splitlines()
+        self.assertIn(self.real_projects_file.name, gitignore_lines)
 
 
 # ---------------------------------------------------------------------------
