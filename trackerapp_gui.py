@@ -533,20 +533,25 @@ window.geometry("500x600")   # width x height in pixels
 button_frame = tk.Frame(window)
 button_frame.pack(side="bottom", fill="x", padx=10, pady=(0, 10))
 tk.Button(button_frame, text="Add Door", command=open_add_door).pack(side="left")
+
 # padx=(10, 0) puts 10 pixels of space on the left of the button, none on the right.
 tk.Button(button_frame, text="Edit Door", command=open_edit_door).pack(side="left", padx=(10, 0))
+
 # The Export button opens a small drop-down menu to pick the report format.
 # A Menubutton is a button that shows a Menu when clicked.
 # relief="raised" makes it look like the other buttons.
 export_button = tk.Menubutton(button_frame, text="Export ▾", relief="raised")
+
 # tearoff=False removes a dashed line tkinter normally puts at the top of
 # menus (clicking it would pop the menu out into its own little window).
 export_menu = tk.Menu(export_button, tearoff=False)
 export_menu.add_command(label="Text file (.txt)", command=export_text)
 export_menu.add_command(label="PDF (.pdf)", command=export_pdf)
+
 # Connect the menu to the button.
 export_button.config(menu=export_menu)
 export_button.pack(side="left", padx=(10, 0))
+
 # side="right" puts Remove Door on the far right, away from Add and Edit,
 # so it's harder to click by accident.
 tk.Button(button_frame, text="Remove Door", command=remove_selected_door).pack(side="right")
@@ -556,6 +561,7 @@ tk.Button(button_frame, text="Remove Door", command=remove_selected_door).pack(s
 # justify="left" lines up both lines of text on the left.
 # It must be packed BEFORE the table below, or it would end up under it.
 summary_label = tk.Label(window, text="", font=("TkDefaultFont", 11, "bold"), justify="left")
+
 # anchor="w" keeps the label on the left side of the window.
 summary_label.pack(side="top", anchor="w", padx=10, pady=(10, 0))
 
