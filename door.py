@@ -4,6 +4,14 @@
 # Example:
 #   door.name    = "Main Entrance"
 #   door.devices = {"Card Reader": "C", "Lock": "P", "REX": "N"}
+
+# The only status letters a device is allowed to have:
+#   C = Complete, P = Pending, R = Restrained, N = N/a
+# Kept here, with the Door class, so every file that works with doors can use
+# it: from door import Door, VALID_STATUSES
+VALID_STATUSES = ["C", "P", "R", "N"]
+
+
 class Door:
     # __init__ runs when a new Door is created, for example:
     #   Door("Main Entrance", {"Card Reader": "C", "Lock": "P"})

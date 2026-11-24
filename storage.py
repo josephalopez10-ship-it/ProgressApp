@@ -1,6 +1,6 @@
 # STORAGE
 # Saves and loads every project to and from projects.json.
-# The GUI uses this instead of the save/load code in trackerapp_2.py.
+# Used by the GUI (trackerapp_gui.py).
 #
 # projects.json holds a list of projects, and each project holds its doors:
 #   [

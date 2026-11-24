@@ -1,6 +1,8 @@
 # DOOR TRACKER APP - GUI VERSION
-# A window version of trackerapp_2.py. It uses the same door_list.json,
-# so doors added in either version show up in both.
+# Tracks several projects (jobs). Each project has its own doors, and each
+# door has its own devices. Pick the project from the dropdown at the top;
+# the table, summary, buttons and reports all work on that project.
+# Everything is saved in projects.json (see storage.py).
 #
 # How a GUI runs is different from the terminal version:
 #   1. The code below builds the window (table, buttons).
@@ -20,13 +22,15 @@ from tkinter import messagebox
 from tkinter import filedialog
 # date gives today's date, used in the report's file name.
 from datetime import date
-# The Door class, to create new doors.
-from door import Door
+# The Door class, to create new doors, and the list of allowed status letters.
+from door import Door, VALID_STATUSES
+# The Project class, to make a project when there are none yet.
+from project import Project
 # Our own report.py, which builds the text report.
 import report
-# Reuse the door list and the load/save functions from the terminal version.
-# "as data" means we write data.door_list, data.save_doors(), and so on.
-import trackerapp_2 as data
+# Our own storage.py, which loads and saves every project.
+# We write storage.project_list, storage.save_projects(), and so on.
+import storage
 
 # The text color for each status. These are hex color codes (#RRGGBB).
 # N isn't listed, so N rows use the normal text color.
@@ -36,15 +40,20 @@ STATUS_COLORS = {
     "R": "#c62828",   # red
 }
 
+# The project picked in the dropdown at the top. Every function that works
+# on doors uses current_project.doors. It's set when the app starts, and
+# changed by show_project() when another project is picked.
+current_project = None
 
-# Clear the table and fill it again from door_list.
+
+# Clear the table and fill it again from the current project's doors.
 # Call this whenever a door is added, edited, or removed, so the table always matches the saved data.
 def refresh_tree():
     # Remove every row currently in the table.
     for row in tree.get_children():
         tree.delete(row)
 
-    for door in data.door_list:
+    for door in current_project.doors:
         status = door.status()
         # Add the door as a top-level row. "" means it has no parent row,
         # and "end" puts it at the bottom of the table.
@@ -69,7 +78,7 @@ def refresh_summary():
     # How many doors have each overall status. door.status() only ever gives
     # back C, P, or R, so those are the only keys needed.
     counts = {"C": 0, "P": 0, "R": 0}
-    for door in data.door_list:
+    for door in current_project.doors:
         # += 1 adds one to the count for this door's status.
         counts[door.status()] += 1
 
@@ -77,7 +86,7 @@ def refresh_summary():
     # the next device), the same way they're ignored for the door status.
     devices_total = 0
     devices_done = 0
-    for door in data.door_list:
+    for door in current_project.doors:
         for device_status in door.devices.values():
             if device_status == "N":
                 continue
@@ -96,7 +105,7 @@ def refresh_summary():
     # "\n" puts the device totals on a second line.
     # Two f-strings next to each other inside the brackets are joined into one,
     # which is how a long line of text is split over several lines of code.
-    summary_label.config(text=f"{len(data.door_list)} doors: {counts['C']} complete, "
+    summary_label.config(text=f"{len(current_project.doors)} doors: {counts['C']} complete, "
                               f"{counts['P']} pending, {counts['R']} restrained\n"
                               f"Devices: {devices_done} of {devices_total} complete ({percent}%)")
 
@@ -118,7 +127,7 @@ def get_selected_door():
         row = tree.parent(row)
 
     # The row's text is the door name, so look the door up by name.
-    return data.find_door(tree.item(row, "text"))
+    return current_project.find_door(tree.item(row, "text"))
 
 
 # Runs when a row in the table is double-clicked: open the Edit window for it.
@@ -174,7 +183,7 @@ def open_add_door():
 
     # A Combobox is a dropdown. state="readonly" means you can only pick
     # from the list (C, P, R, N), not type something else.
-    status_box = ttk.Combobox(add_window, values=data.VALID_STATUSES, width=4, state="readonly")
+    status_box = ttk.Combobox(add_window, values=VALID_STATUSES, width=4, state="readonly")
 
     # Start the dropdown on P, since most devices start out pending.
     status_box.set("P")
@@ -221,14 +230,14 @@ def open_add_door():
             messagebox.showerror("Missing name", "Door name cannot be blank.", parent=add_window)
             return
         # find_door ignores upper/lowercase, so "joes door" matches "Joes Door".
-        if data.find_door(name) is not None:
+        if current_project.find_door(name) is not None:
             messagebox.showerror("Duplicate door", f"{name} already exists.", parent=add_window)
             return
 
         new_door.name = name
-        data.door_list.append(new_door)
-        # Save to door_list.json so the door is kept after the app closes.
-        data.save_doors()
+        current_project.doors.append(new_door)
+        # Save to projects.json so the door is kept after the app closes.
+        storage.save_projects()
         # Redraw the main table so the new door shows up.
         refresh_tree()
         # Close the Add door window.
@@ -237,7 +246,7 @@ def open_add_door():
     # --- Row 4: Save Door and Cancel buttons ---
     # sticky="e" lines Save Door up on the right (e = east), next to Cancel.
     tk.Button(add_window, text="Save Door", command=save_door).grid(row=4, column=1, sticky="e", pady=10)
-    # Cancel just closes the window. new_door was never added to door_list,
+    # Cancel just closes the window. new_door was never added to the project,
     # so nothing is saved.
     tk.Button(add_window, text="Cancel", command=add_window.destroy).grid(row=4, column=2, pady=10)
 
@@ -310,10 +319,10 @@ def open_edit_door():
             return None
         return device_names[selected[0]]
 
-    # Run after every change: save to door_list.json, then redraw the main
+    # Run after every change: save to projects.json, then redraw the main
     # table and this window's device list so both show the change.
     def changes_made():
-        data.save_doors()
+        storage.save_projects()
         refresh_tree()
         refresh_devices()
 
@@ -327,7 +336,7 @@ def open_edit_door():
         # Block the name if a DIFFERENT door already uses it. "is not door"
         # still lets you fix the capitals on this door's own name,
         # like "lobby" to "Lobby".
-        other_door = data.find_door(new_name)
+        other_door = current_project.find_door(new_name)
         if other_door is not None and other_door is not door:
             messagebox.showerror("Duplicate door", f"{new_name} already exists.", parent=edit_window)
             return
@@ -341,7 +350,7 @@ def open_edit_door():
 
     # --- Row 2: status dropdown + Set Status button (for the selected device) ---
     tk.Label(edit_window, text="Status:").grid(row=2, column=0, sticky="w", padx=10)
-    status_box = ttk.Combobox(edit_window, values=data.VALID_STATUSES, width=4, state="readonly")
+    status_box = ttk.Combobox(edit_window, values=VALID_STATUSES, width=4, state="readonly")
     status_box.grid(row=2, column=1, sticky="w", padx=10)
 
     # Runs when Set Status is clicked: give the selected device the status
@@ -392,7 +401,7 @@ def open_edit_door():
     new_device_entry.grid(row=4, column=1, sticky="w", padx=10, pady=(15, 5))
     # A second dropdown just for the new device, so it doesn't get mixed up
     # with the one used for Set Status.
-    new_status_box = ttk.Combobox(edit_window, values=data.VALID_STATUSES, width=4, state="readonly")
+    new_status_box = ttk.Combobox(edit_window, values=VALID_STATUSES, width=4, state="readonly")
     new_status_box.set("P")
     new_status_box.grid(row=4, column=2, padx=10, pady=(15, 5))
 
@@ -445,17 +454,15 @@ def confirm_and_delete_door(door, parent):
     # The icon name must be lowercase: error, info, question, or warning.
     if messagebox.askyesno("Remove door", f"Delete {door.name} and all its devices?\nThis can't be undone.",
                            icon="warning", parent=parent):
-        data.door_list.remove(door)
-        # Save so the door is also gone from door_list.json.
-        data.save_doors()
+        current_project.doors.remove(door)
+        # Save so the door is also gone from projects.json.
+        storage.save_projects()
         refresh_tree()
         return True
     return False
 
 
 # Remove the door selected in the table. Runs when Remove Door is clicked.
-# Named remove_selected_door so it isn't confused with remove_door() in the
-# terminal version (trackerapp_2.py).
 def remove_selected_door():
     door = get_selected_door()
     if door is None:
@@ -489,9 +496,9 @@ def export_report(file_type):
     # to write in, and shows a pop-up instead of crashing.
     try:
         if file_type == "pdf":
-            report.make_pdf_report(data.door_list, file_path, summary_label.cget("text"))
+            report.make_pdf_report(current_project.doors, file_path, summary_label.cget("text"))
         else:
-            report.make_text_report(data.door_list, file_path, summary_label.cget("text"))
+            report.make_text_report(current_project.doors, file_path, summary_label.cget("text"))
     except OSError as error:
         messagebox.showerror("Could not save", f"The report could not be saved:\n{error}")
         return
@@ -512,13 +519,57 @@ def export_pdf():
     export_report("pdf")
 
 
+# Fill the project dropdown with every project's name, and show the current
+# project as the one selected.
+def refresh_project_choices():
+    names = []
+    for project in storage.project_list:
+        names.append(project.name)
+    # values= is the list of choices in the dropdown.
+    project_box.config(values=names)
+    # .set() changes what the dropdown is showing.
+    project_box.set(current_project.name)
+
+
+# Switch the whole window over to this project: the title, the dropdown,
+# the table, and the summary.
+def show_project(project):
+    # "global" lets this function change current_project, which was created
+    # at the top of the file. Without it, Python would make a new variable
+    # that only exists inside this function.
+    global current_project
+    current_project = project
+    window.title(f"TrackerApp - {project.name}")
+    refresh_project_choices()
+    # refresh_tree() also updates the summary, so both now show this project.
+    refresh_tree()
+
+
+# Runs when a project is picked from the dropdown.
+# .current() gives the position of the picked choice: 0 for the first, 1 for
+# the second, and so on. The dropdown lists the projects in the same order as
+# project_list, so that position finds the right project.
+def project_chosen(event):
+    position = project_box.current()
+    if position >= 0:
+        show_project(storage.project_list[position])
+
+
 ##########################################################################
 # Build the main window. Everything below runs once, when the app starts.
 ##########################################################################
 
 
-# Load the saved doors before building the window.
-data.load_doors()
+# Load the saved projects before building the window.
+# The first time, this also moves the doors from the old door_list.json
+# into "My First Project" (see storage.py).
+storage.load_projects()
+
+# A brand-new install has no projects at all. Make an empty one, so there's
+# always a project to add doors to.
+if len(storage.project_list) == 0:
+    storage.project_list.append(Project(storage.FIRST_PROJECT_NAME))
+    storage.save_projects()
 
 # Create the main window.
 window = tk.Tk()
@@ -556,6 +607,17 @@ export_button.pack(side="left", padx=(10, 0))
 # so it's harder to click by accident.
 tk.Button(button_frame, text="Remove Door", command=remove_selected_door).pack(side="right")
 
+# The project picker along the top of the window: a label and a dropdown.
+# It's packed first, so it sits above the summary and the table.
+project_frame = tk.Frame(window)
+project_frame.pack(side="top", fill="x", padx=10, pady=(10, 0))
+tk.Label(project_frame, text="Project:").pack(side="left")
+# state="readonly" means you can only pick a project, not type in the box.
+project_box = ttk.Combobox(project_frame, state="readonly", width=35)
+project_box.pack(side="left", padx=(5, 0))
+# "<<ComboboxSelected>>" is the event tkinter sends when a choice is picked.
+project_box.bind("<<ComboboxSelected>>", project_chosen)
+
 # The progress summary along the top of the window.
 # font=(name, size, "bold") makes it bigger and bold so it stands out.
 # justify="left" lines up both lines of text on the left.
@@ -583,8 +645,9 @@ tree.bind("<Double-1>", row_double_clicked)
 for status, color in STATUS_COLORS.items():
     tree.tag_configure(status, foreground=color)
 
-# Fill the table with the loaded doors.
-refresh_tree()
+# Start on the first project. This fills the dropdown, the table and the
+# summary.
+show_project(storage.project_list[0])
 
 # Start the GUI. This keeps the window open and waits for clicks.
 # Any code below this line only runs after the window is closed.

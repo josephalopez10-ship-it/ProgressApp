@@ -6,8 +6,9 @@
 # Each test prints "ok" if it passed, or FAIL / ERROR with details if not.
 # Run this after every change to make sure nothing that used to work broke.
 #
-# The tests never touch your real door_list.json. Before each test, the save
-# file is pointed at a temporary folder that is deleted afterward.
+# The tests never touch your real projects.json or door_list.json. Before
+# each test, the save files are pointed at a temporary folder that is deleted
+# afterward.
 
 # unittest is Python's built-in testing tool.
 import unittest
@@ -22,7 +23,6 @@ from tkinter import ttk, messagebox, filedialog
 
 from door import Door
 from project import Project
-import trackerapp_2 as data
 import storage
 
 
@@ -141,98 +141,11 @@ class TestProject(unittest.TestCase):
 
 
 # ---------------------------------------------------------------------------
-# A base class that points the save file at a temporary folder.
-# Every test class that saves or loads doors uses this instead of
-# unittest.TestCase, so the real door_list.json is never touched.
+# A base class that points both save files (projects.json and the old
+# door_list.json) at a temporary folder. Every test class that saves or loads
+# uses this instead of unittest.TestCase, so your real files are never touched.
 # ---------------------------------------------------------------------------
 class UsesTempSaveFile(unittest.TestCase):
-
-    def setUp(self):
-        self.temp_folder = tempfile.TemporaryDirectory()
-        # Remember the real file path so it can be put back afterward.
-        self.real_file_path = data.FILE_PATH
-        data.FILE_PATH = Path(self.temp_folder.name) / "door_list.json"
-        # Start every test with an empty door list.
-        data.door_list.clear()
-
-    def tearDown(self):
-        # tearDown runs after EVERY test, even ones that fail.
-        data.FILE_PATH = self.real_file_path
-        data.door_list.clear()
-        self.temp_folder.cleanup()
-
-    # Helper: write some text straight into the temporary save file.
-    def write_save_file(self, text):
-        data.FILE_PATH.write_text(text, encoding="utf-8")
-
-
-# ---------------------------------------------------------------------------
-# find_door(): finding a door by name, ignoring upper/lowercase
-# ---------------------------------------------------------------------------
-class TestFindDoor(UsesTempSaveFile):
-
-    def setUp(self):
-        # super().setUp() runs the setUp from UsesTempSaveFile first.
-        super().setUp()
-        data.door_list.append(Door("Main Entrance"))
-
-    def test_exact_name(self):
-        self.assertEqual(data.find_door("Main Entrance").name, "Main Entrance")
-
-    def test_ignores_case_and_spaces(self):
-        self.assertEqual(data.find_door("  main ENTRANCE ").name, "Main Entrance")
-
-    def test_missing_door(self):
-        self.assertIsNone(data.find_door("Server Room"))
-
-
-# ---------------------------------------------------------------------------
-# save_doors() and load_doors(): the JSON save file
-# ---------------------------------------------------------------------------
-class TestSaveAndLoad(UsesTempSaveFile):
-
-    def test_no_save_file_starts_empty(self):
-        data.load_doors()
-        self.assertEqual(data.door_list, [])
-
-    def test_save_then_load_keeps_everything(self):
-        data.door_list.append(Door("Main Entrance", {"Card Reader": "C", "Lock": "P"}))
-        # A comma in the name used to break the old text file.
-        data.door_list.append(Door("Bldg A, Door 101", {"REX": "R"}))
-        data.save_doors()
-
-        # Empty the list, then load it back from the file.
-        data.door_list.clear()
-        data.load_doors()
-
-        self.assertEqual(len(data.door_list), 2)
-        self.assertEqual(data.door_list[0].name, "Main Entrance")
-        self.assertEqual(data.door_list[0].devices, {"Card Reader": "C", "Lock": "P"})
-        self.assertEqual(data.door_list[1].name, "Bldg A, Door 101")
-        self.assertEqual(data.door_list[1].status(), "R")
-
-    def test_damaged_file_stops_the_app_and_is_not_overwritten(self):
-        broken_text = '[{"name": "X", "devices": {'
-        self.write_save_file(broken_text)
-        # assertRaises(SystemExit) means "the test fails unless the app
-        # tries to close itself" (that's what sys.exit does).
-        with self.assertRaises(SystemExit):
-            data.load_doors()
-        # The damaged file must still be there, unchanged, so it can be fixed.
-        self.assertEqual(data.FILE_PATH.read_text(encoding="utf-8"), broken_text)
-
-    def test_door_missing_devices_stops_the_app(self):
-        self.write_save_file('[{"name": "X"}]')
-        with self.assertRaises(SystemExit):
-            data.load_doors()
-
-
-# ---------------------------------------------------------------------------
-# storage.py: saving and loading projects, and moving the old doors over.
-# Like UsesTempSaveFile, both save files are pointed at a temporary folder,
-# so the real projects.json and door_list.json are never touched.
-# ---------------------------------------------------------------------------
-class TestStorage(unittest.TestCase):
 
     def setUp(self):
         self.temp_folder = tempfile.TemporaryDirectory()
@@ -242,13 +155,25 @@ class TestStorage(unittest.TestCase):
         self.real_old_doors_file = storage.OLD_DOORS_FILE
         storage.PROJECTS_FILE = folder / "projects.json"
         storage.OLD_DOORS_FILE = folder / "door_list.json"
+        # Start every test with no projects.
         storage.project_list.clear()
 
     def tearDown(self):
+        # tearDown runs after EVERY test, even ones that fail.
         storage.PROJECTS_FILE = self.real_projects_file
         storage.OLD_DOORS_FILE = self.real_old_doors_file
         storage.project_list.clear()
         self.temp_folder.cleanup()
+
+    # Helper: write some text straight into the temporary projects.json.
+    def write_save_file(self, text):
+        storage.PROJECTS_FILE.write_text(text, encoding="utf-8")
+
+
+# ---------------------------------------------------------------------------
+# storage.py: saving and loading projects, and moving the old doors over.
+# ---------------------------------------------------------------------------
+class TestStorage(UsesTempSaveFile):
 
     # Helper: write an old-style door_list.json in the temporary folder.
     def write_old_doors(self, doors):
@@ -339,11 +264,19 @@ class GuiTestBase(UsesTempSaveFile):
     # The doors in the save file when the GUI starts. A test class can
     # replace this with its own list.
     SAVED_DOORS = [{"name": "Joes Door", "devices": {"Lock": "P"}}]
+    # The name of the project those doors are saved in.
+    PROJECT_NAME = "Test Project"
+    # A test class can set this to a list of whole projects instead, to start
+    # with several projects (or [] for none at all).
+    SAVED_PROJECTS = None
 
     def setUp(self):
         super().setUp()
-        # Put the starting doors in the save file before the GUI loads it.
-        self.write_save_file(json.dumps(self.SAVED_DOORS))
+        # Put the starting project(s) in the save file before the GUI loads it.
+        projects = self.SAVED_PROJECTS
+        if projects is None:
+            projects = [{"name": self.PROJECT_NAME, "doors": self.SAVED_DOORS}]
+        self.write_save_file(json.dumps(projects))
 
         # Replace the pop-up error box with one that just records the message,
         # so the tests don't stop and wait for someone to click OK.
@@ -387,8 +320,14 @@ class GuiTestBase(UsesTempSaveFile):
         return rows
 
     # Helper: read the save file back as a list of dictionaries.
+    # It gives back the first project's list of doors, since that's the
+    # project the GUI tests work on.
     def saved_file(self):
-        return json.loads(data.FILE_PATH.read_text(encoding="utf-8"))
+        return json.loads(storage.PROJECTS_FILE.read_text(encoding="utf-8"))[0]["doors"]
+
+    # Helper: the doors of the project the GUI is showing.
+    def doors(self):
+        return self.gui["current_project"].doors
 
     # Helper: the newest Toplevel (pop-up) window that's open.
     def newest_window(self):
@@ -460,14 +399,14 @@ class TestGuiAddDoor(GuiTestBase):
         name_entry.insert(0, "joes door")
         buttons["Save Door"].invoke()
         self.assertEqual(self.errors, ["joes door already exists."])
-        self.assertEqual(len(data.door_list), 1)
+        self.assertEqual(len(self.doors()), 1)
 
     def test_cancel_saves_nothing(self):
         add_window, name_entry, device_entry, status_box, buttons = self.open_add_window()
         self.add_device(device_entry, status_box, buttons, "Lock", "C")
         name_entry.insert(0, "Stair 2")
         buttons["Cancel"].invoke()
-        self.assertEqual(len(data.door_list), 1)
+        self.assertEqual(len(self.doors()), 1)
         self.assertFalse(add_window.winfo_exists())
 
 
@@ -575,7 +514,7 @@ class TestGuiEditDoor(GuiTestBase):
         edit["buttons"]["Set Status"].invoke()
 
         self.assertEqual(self.errors, [])
-        self.assertEqual(data.door_list[0].devices["Lock"], "C")
+        self.assertEqual(self.doors()[0].devices["Lock"], "C")
 
     def test_set_status_with_no_device_selected(self):
         edit = self.open_edit_window("Joes Door")
@@ -618,7 +557,7 @@ class TestGuiEditDoor(GuiTestBase):
         edit = self.open_edit_window("alex door")
         self.click_device(edit, "Sounder")
         edit["buttons"]["Delete device"].invoke()
-        self.assertEqual(data.door_list[1].devices, {"Sounder": "R"})
+        self.assertEqual(self.doors()[1].devices, {"Sounder": "R"})
 
     def test_rename(self):
         edit = self.open_edit_window("Joes Door")
@@ -637,7 +576,7 @@ class TestGuiEditDoor(GuiTestBase):
         edit["name"].insert(0, "ALEX DOOR")
         edit["buttons"]["Rename"].invoke()
         self.assertEqual(self.errors, ["ALEX DOOR already exists."])
-        self.assertEqual(data.door_list[0].name, "Joes Door")
+        self.assertEqual(self.doors()[0].name, "Joes Door")
 
     def test_rename_can_fix_own_capitals(self):
         edit = self.open_edit_window("Joes Door")
@@ -645,7 +584,7 @@ class TestGuiEditDoor(GuiTestBase):
         edit["name"].insert(0, "JOES DOOR")
         edit["buttons"]["Rename"].invoke()
         self.assertEqual(self.errors, [])
-        self.assertEqual(data.door_list[0].name, "JOES DOOR")
+        self.assertEqual(self.doors()[0].name, "JOES DOOR")
 
     def test_rename_blank_is_blocked(self):
         edit = self.open_edit_window("Joes Door")
@@ -707,7 +646,7 @@ class TestGuiEditDoor(GuiTestBase):
         self.answer_yes = False
         edit = self.open_edit_window("alex door")
         edit["buttons"]["Delete Door"].invoke()
-        self.assertEqual(len(data.door_list), 2)
+        self.assertEqual(len(self.doors()), 2)
         # The Edit window stays open.
         self.assertTrue(edit["window"].winfo_exists())
 
@@ -745,7 +684,7 @@ class TestGuiRemoveDoor(GuiTestBase):
     def test_nothing_selected_shows_error(self):
         self.gui["remove_selected_door"]()
         self.assertEqual(self.errors, ["Click a door in the list first"])
-        self.assertEqual(len(data.door_list), 2)
+        self.assertEqual(len(self.doors()), 2)
 
     def test_no_keeps_the_door(self):
         self.answer_yes = False
@@ -794,7 +733,7 @@ class TestGuiSummary(GuiTestBase):
 
     def test_updates_after_a_change(self):
         # Change Busy Door's REX from P to C, then redraw like the app does.
-        data.door_list[1].devices["REX"] = "C"
+        self.doors()[1].devices["REX"] = "C"
         self.gui["refresh_tree"]()
         self.assertEqual(self.summary(),
                          "4 doors: 2 complete, 1 pending, 1 restrained\n"
@@ -808,7 +747,7 @@ class TestGuiSummary(GuiTestBase):
 
     def test_no_doors_does_not_crash(self):
         # With no devices at all, the percent must not divide by zero.
-        data.door_list.clear()
+        self.doors().clear()
         self.gui["refresh_tree"]()
         self.assertEqual(self.summary(),
                          "0 doors: 0 complete, 0 pending, 0 restrained\n"
@@ -929,6 +868,93 @@ class TestGuiExport(GuiTestBase):
         self.assertEqual(self.info_messages, [f"Report saved to:\n{pdf_path}"])
         # Every PDF file starts with the characters "%PDF".
         self.assertTrue(pdf_path.read_bytes().startswith(b"%PDF"))
+
+
+# ---------------------------------------------------------------------------
+# Several projects: the project dropdown at the top of the window
+# ---------------------------------------------------------------------------
+class TestGuiProjects(GuiTestBase):
+
+    SAVED_PROJECTS = [
+        {"name": "Westfield Mall", "job_number": "24-117",
+         "doors": [{"name": "Main Entrance", "devices": {"Lock": "C"}},
+                   {"name": "Loading Dock", "devices": {"REX": "R"}}]},
+        {"name": "City Hospital",
+         "doors": [{"name": "Main Entrance", "devices": {"Lock": "P"}}]},
+    ]
+
+    # Helper: pick a project in the dropdown, the way a user does.
+    def pick_project(self, name):
+        project_box = self.gui["project_box"]
+        project_box.set(name)
+        # Send the same event a real pick sends, then let tkinter handle it.
+        project_box.event_generate("<<ComboboxSelected>>")
+        self.gui["window"].update()
+
+    def test_starts_on_first_project(self):
+        self.assertEqual(self.gui["project_box"].get(), "Westfield Mall")
+        self.assertEqual(self.gui["window"].title(), "TrackerApp - Westfield Mall")
+        self.assertEqual([name for name, status, devices in self.table_rows()],
+                         ["Main Entrance", "Loading Dock"])
+
+    def test_dropdown_lists_every_project(self):
+        self.assertEqual(list(self.gui["project_box"].cget("values")),
+                         ["Westfield Mall", "City Hospital"])
+
+    def test_picking_a_project_shows_its_doors_and_summary(self):
+        self.gui["window"].update()
+        self.pick_project("City Hospital")
+        self.assertEqual(self.gui["current_project"].name, "City Hospital")
+        self.assertEqual(self.gui["window"].title(), "TrackerApp - City Hospital")
+        self.assertEqual(self.table_rows(), [("Main Entrance", "P", ["Lock=P"])])
+        self.assertTrue(self.gui["summary_label"].cget("text").startswith("1 doors: 0 complete, 1 pending"))
+
+    def test_new_door_only_goes_into_current_project(self):
+        self.gui["window"].update()
+        self.pick_project("City Hospital")
+        # Add a door through the real Add door window.
+        self.gui["open_add_door"]()
+        add_window = self.newest_window()
+        name_entry = [w for w in add_window.winfo_children() if type(w) is tk.Entry][0]
+        name_entry.insert(0, "Roof Hatch")
+        buttons = {w.cget("text"): w for w in add_window.winfo_children() if isinstance(w, tk.Button)}
+        buttons["Save Door"].invoke()
+
+        mall, hospital = storage.project_list
+        self.assertEqual([d.name for d in hospital.doors], ["Main Entrance", "Roof Hatch"])
+        self.assertEqual([d.name for d in mall.doors], ["Main Entrance", "Loading Dock"])
+        # And it was saved inside the right project in projects.json.
+        saved = json.loads(storage.PROJECTS_FILE.read_text(encoding="utf-8"))
+        self.assertEqual([d["name"] for d in saved[1]["doors"]], ["Main Entrance", "Roof Hatch"])
+
+    def test_same_door_name_allowed_in_another_project(self):
+        # Both projects already have a "Main Entrance". Editing one must not
+        # change the other.
+        mall, hospital = storage.project_list
+        mall.find_door("Main Entrance").devices["Lock"] = "P"
+        self.assertEqual(hospital.find_door("Main Entrance").devices, {"Lock": "P"})
+        self.assertIsNot(mall.find_door("Main Entrance"), hospital.find_door("Main Entrance"))
+
+    def test_project_details_are_kept_when_saving(self):
+        # Saving after a change must not lose a project's job number.
+        self.gui["refresh_tree"]()
+        storage.save_projects()
+        saved = json.loads(storage.PROJECTS_FILE.read_text(encoding="utf-8"))
+        self.assertEqual(saved[0]["job_number"], "24-117")
+
+
+class TestGuiNoProjects(GuiTestBase):
+
+    # An empty projects.json: no projects at all.
+    SAVED_PROJECTS = []
+
+    def test_makes_an_empty_first_project(self):
+        self.assertEqual([p.name for p in storage.project_list], ["My First Project"])
+        self.assertEqual(self.gui["project_box"].get(), "My First Project")
+        self.assertEqual(self.table_rows(), [])
+        # It's saved straight away.
+        saved = json.loads(storage.PROJECTS_FILE.read_text(encoding="utf-8"))
+        self.assertEqual(saved[0]["name"], "My First Project")
 
 
 # This lets you also run the file directly: .venv/bin/python test_tracker.py
