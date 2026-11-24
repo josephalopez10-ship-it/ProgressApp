@@ -10,13 +10,19 @@
 
 # json saves and reads lists and dictionaries as text.
 import json
-# sys lets us close the app on purpose with sys.exit().
-import sys
 # Path is a built-in tool for working with file locations.
 from pathlib import Path
 # Door and Project are our own classes, from door.py and project.py.
 from door import Door
 from project import Project
+
+# The error raised when a save file can't be read. It's our own kind of
+# error, made by "inheriting" from Python's Exception (the parent of every
+# error). The GUI catches it and shows a pop-up instead of crashing.
+# "pass" means the class needs nothing extra: just the new name.
+class LoadError(Exception):
+    pass
+
 
 # The folder this file is in. Both save files live here, no matter which
 # folder the app is started from.
@@ -72,15 +78,17 @@ def load_projects():
         for data in saved_projects:
             project_list.append(Project.from_dict(data))
 
-    # If the file is damaged, stop the app instead of carrying on with an
-    # empty list. Otherwise the next save would overwrite the damaged file
-    # and every project in it would be lost for good.
-    # JSONDecodeError = not valid JSON, KeyError = something missing (like a
-    # project with no "doors"), TypeError = the wrong kind of data.
-    except(json.JSONDecodeError, KeyError, TypeError) as error:
-        print(f"Could not read {PROJECTS_FILE.name}: {error}")
-        print(f"Fix or rename the file, then start the app again.")
-        sys.exit(1)
+    # If the file is damaged, stop instead of carrying on with an empty
+    # list. Otherwise the next save would overwrite the damaged file and
+    # every project in it would be lost for good.
+    # ValueError = not valid JSON (or not readable text), KeyError =
+    # something missing (like a project with no "doors"), TypeError = the
+    # wrong kind of data, OSError = the file can't be opened (no permission).
+    # "raise" sends a LoadError up to whoever called load_projects(); the
+    # GUI catches it and shows a pop-up. "from error" keeps the original
+    # error attached, which helps when tracking down the problem.
+    except (ValueError, KeyError, TypeError, OSError) as error:
+        raise LoadError(f"Could not read {PROJECTS_FILE}:\n{error}") from error
 
 
 # One-time move (a "migration"): put the doors from the old door_list.json
@@ -100,10 +108,8 @@ def move_old_doors():
         for door_data in saved_doors:
             doors.append(Door.from_dict(door_data))
     # Same as load_projects(): stop rather than lose the old doors.
-    except (json.JSONDecodeError, KeyError, TypeError) as error:
-        print(f"Could not read {OLD_DOORS_FILE.name}: {error}")
-        print("Fix or rename the file, then start the app again.")
-        sys.exit(1)
+    except (ValueError, KeyError, TypeError, OSError) as error:
+        raise LoadError(f"Could not read {OLD_DOORS_FILE}:\n{error}") from error
 
     project_list.append(Project(FIRST_PROJECT_NAME, doors=doors))
 

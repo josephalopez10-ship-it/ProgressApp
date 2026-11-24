@@ -23,6 +23,10 @@ import sv_ttk
 from tkinter import messagebox
 # filedialog opens the standard "Save as" window to pick where to save a file.
 from tkinter import filedialog
+# sys lets us close the app on purpose with sys.exit().
+import sys
+# traceback prints the full details of an error to the terminal.
+import traceback
 # date gives today's date, used in the report's file name.
 # datetime gives the date AND time, used for "saved at 3:42 PM" in the
 # status bar.
@@ -990,6 +994,78 @@ def show_shortcuts():
                         parent=window)
 
 
+# The app's icon, shown in the window's title bar and the taskbar. It's kept
+# in the same folder as the code (storage.FOLDER is that folder).
+ICON_FILE = storage.FOLDER / "icon.png"
+
+# The window's size the very first time, before any size has been saved:
+# width x height in pixels (wide enough for the project row).
+DEFAULT_GEOMETRY = "560x680"
+
+
+# Check a saved window size and position before using it, and fix it up if
+# needed. geometry is text like "700x800+120+40": 700 wide, 800 tall, 120
+# pixels from the left of the screen and 40 from the top.
+# screen_width / screen_height are the size of the screen it opens on.
+# Gives back the text to pass to window.geometry().
+def safe_geometry(geometry, screen_width, screen_height):
+    # try/except: if the saved text isn't in the right shape (damaged
+    # settings file, or a setting from an old version), int() or split()
+    # fails with ValueError, and we fall back to the default size.
+    try:
+        # partition("+") splits at the FIRST "+":
+        #   "700x800+120+40" -> "700x800", "+", "120+40"
+        size, plus, position = geometry.partition("+")
+        width_text, height_text = size.split("x")
+        width = int(width_text)
+        height = int(height_text)
+        x_text, y_text = position.split("+")
+        x = int(x_text)
+        y = int(y_text)
+    except (ValueError, AttributeError):
+        return DEFAULT_GEOMETRY
+
+    # Never bigger than the screen (say the last run was on a bigger monitor).
+    # min() gives back the smaller of the two numbers.
+    width = min(width, screen_width)
+    height = min(height, screen_height)
+
+    # If the window would open off the edge of the screen (say a second
+    # monitor was unplugged), keep the size but let the desktop place it.
+    if x < 0 or y < 0 or x > screen_width - 100 or y > screen_height - 100:
+        return f"{width}x{height}"
+    return f"{width}x{height}+{x}+{y}"
+
+
+# Show a pop-up for an error nobody planned for (a bug), instead of the app
+# silently doing nothing. tkinter calls this whenever a button's function
+# (or any other callback) crashes; see report_callback_exception below.
+# error_type, error, error_traceback describe the error. The full details
+# still go to the terminal, for tracking the bug down.
+def show_unexpected_error(error_type, error, error_traceback):
+    traceback.print_exception(error_type, error, error_traceback)
+    messagebox.showerror("Something went wrong",
+                         f"An unexpected error happened:\n{error}\n\n"
+                         "Your last saved changes are safe. If this keeps happening, "
+                         "note what you clicked just before it.",
+                         parent=window)
+
+
+# Runs when the app is closed: with the window's X button, File > Quit, or
+# Ctrl+Q. Remembers the window's size and position for next time, then
+# closes the window, which ends the app.
+def quit_app():
+    # A setting that can't be saved isn't worth stopping the app closing
+    # for, so any file error is ignored ("pass" means "do nothing").
+    try:
+        # window.geometry() with nothing passed in gives back the current
+        # size and position, like "700x800+120+40".
+        storage.save_setting("window_geometry", window.geometry())
+    except OSError:
+        pass
+    window.destroy()
+
+
 ##########################################################################
 # Build the main window. Everything below runs once, when the app starts.
 ##########################################################################
@@ -998,7 +1074,29 @@ def show_shortcuts():
 # Load the saved projects before building the window.
 # The first time, this also moves the doors from the old door_list.json
 # into "My First Project" (see storage.py).
-storage.load_projects()
+# If a save file is damaged, storage raises a LoadError. Show a pop-up that
+# explains what to do, then stop, WITHOUT saving anything, so the damaged
+# file (and the projects in it) aren't overwritten.
+try:
+    storage.load_projects()
+except storage.LoadError as error:
+    # The main window isn't built yet, and a pop-up needs a window to belong
+    # to. So make a plain one and hide it with withdraw(); only the pop-up
+    # shows.
+    error_window = tk.Tk()
+    error_window.withdraw()
+    messagebox.showerror(f"{APP_NAME} can't open your projects",
+                         f"{error}\n\n"
+                         "Nothing has been changed or saved.\n\n"
+                         "To fix it: restore the file from a backup, or rename it "
+                         "(for example to projects_broken.json) to start fresh, "
+                         "then open the app again.",
+                         parent=error_window)
+    error_window.destroy()
+    # Also print it, for anyone who started the app from a terminal.
+    print(error)
+    # sys.exit(1) stops the app here. 1 means "stopped because of a problem".
+    sys.exit(1)
 
 # A brand-new install has no projects at all. Make an empty one, so there's
 # always a project to add doors to.
@@ -1007,9 +1105,34 @@ if len(storage.project_list) == 0:
     storage.save_projects()
 
 # Create the main window.
-window = tk.Tk()
+# className is the name the desktop knows the app by. Linux uses it to group
+# the app's windows in the taskbar, and to match it to a menu launcher.
+window = tk.Tk(className=APP_NAME)
 window.title(APP_NAME)
-window.geometry("560x680")   # width x height in pixels (wide enough for the project row)
+
+# Show the app's icon in the title bar and taskbar.
+# PhotoImage loads a picture file (PNG or GIF) so tkinter can use it.
+# iconphoto(True, ...) uses it for this window AND every pop-up opened later.
+# If icon.png is missing, tkinter raises TclError; the app works fine without
+# an icon, so just carry on with the desktop's default one.
+try:
+    app_icon = tk.PhotoImage(file=ICON_FILE)
+    window.iconphoto(True, app_icon)
+except tk.TclError:
+    pass
+# Open the window at the size and place it was last closed at (or the
+# default size the first time). winfo_screenwidth/height give the screen size.
+saved_geometry = storage.load_setting("window_geometry", DEFAULT_GEOMETRY)
+window.geometry(safe_geometry(saved_geometry, window.winfo_screenwidth(), window.winfo_screenheight()))
+# The smallest the window can be dragged to, so the buttons and the search
+# row always fit.
+window.minsize(480, 450)
+# If a button's function crashes, show a pop-up (see show_unexpected_error)
+# instead of only printing the error to a terminal nobody is looking at.
+window.report_callback_exception = show_unexpected_error
+# "WM_DELETE_WINDOW" is the message the desktop sends when the window's X
+# button is clicked. protocol() runs quit_app instead, so the size is saved.
+window.protocol("WM_DELETE_WINDOW", quit_app)
 
 # --- The menu bar along the top of the window: File, Edit, View, Help ---
 # A tk.Menu given to window.config(menu=...) becomes the menu bar. Each
@@ -1026,8 +1149,8 @@ file_menu.add_separator()   # a thin line between groups of items
 file_menu.add_command(label="Export Text Report...", command=export_text)
 file_menu.add_command(label="Export PDF Report...", command=export_pdf)
 file_menu.add_separator()
-# window.destroy closes the main window, which ends the app.
-file_menu.add_command(label="Quit", accelerator="Ctrl+Q", command=window.destroy)
+# quit_app saves the window size, then closes the window, which ends the app.
+file_menu.add_command(label="Quit", accelerator="Ctrl+Q", command=quit_app)
 menu_bar.add_cascade(label="File", menu=file_menu)
 
 edit_menu = tk.Menu(menu_bar, tearoff=False)
@@ -1055,7 +1178,7 @@ help_menu.add_command(label=f"About {APP_NAME}", command=show_about)
 menu_bar.add_cascade(label="Help", menu=help_menu)
 
 # Ctrl+Q quits, like most programs.
-window.bind("<Control-q>", lambda event: window.destroy())
+window.bind("<Control-q>", lambda event: quit_app())
 
 # The status bar along the very bottom of the window. It shows what was
 # done last and when it was saved, like "Added Stair 2 — saved at 3:42 PM".

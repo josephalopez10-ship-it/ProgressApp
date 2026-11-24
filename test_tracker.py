@@ -12,6 +12,9 @@
 
 # unittest is Python's built-in testing tool.
 import unittest
+# contextlib and io are used to hide messages printed during some tests.
+import contextlib
+import io
 # tempfile makes temporary folders that are cleaned up automatically.
 import tempfile
 import json
@@ -245,16 +248,16 @@ class TestStorage(UsesTempSaveFile):
         self.assertEqual(storage.find_project("  WESTFIELD mall ").name, "Westfield Mall")
         self.assertIsNone(storage.find_project("City Hospital"))
 
-    def test_damaged_projects_file_stops_the_app_and_is_not_overwritten(self):
+    def test_damaged_projects_file_raises_load_error_and_is_not_overwritten(self):
         broken_text = '[{"name": "Westfield Mall", "doors": ['
         storage.PROJECTS_FILE.write_text(broken_text, encoding="utf-8")
-        with self.assertRaises(SystemExit):
+        with self.assertRaises(storage.LoadError):
             storage.load_projects()
         self.assertEqual(storage.PROJECTS_FILE.read_text(encoding="utf-8"), broken_text)
 
-    def test_damaged_old_doors_file_stops_the_app(self):
+    def test_damaged_old_doors_file_raises_load_error(self):
         storage.OLD_DOORS_FILE.write_text('[{"name": "X"}]', encoding="utf-8")
-        with self.assertRaises(SystemExit):
+        with self.assertRaises(storage.LoadError):
             storage.load_projects()
         # Nothing was moved, so no projects.json was made.
         self.assertFalse(storage.PROJECTS_FILE.exists())
@@ -1560,6 +1563,118 @@ class TestGuiMenuBar(GuiTestBase):
 
     def test_window_title_uses_app_name(self):
         self.assertEqual(self.gui["window"].title(), "TrackerApp - Test Project")
+
+
+# ---------------------------------------------------------------------------
+# Remembering the window's size and position
+# ---------------------------------------------------------------------------
+class TestGuiWindowSize(GuiTestBase):
+
+    # safe_geometry() is tested with a pretend 1920 x 1080 screen.
+    def safe(self, geometry):
+        return self.gui["safe_geometry"](geometry, 1920, 1080)
+
+    def test_good_geometry_is_kept(self):
+        self.assertEqual(self.safe("700x800+120+40"), "700x800+120+40")
+
+    def test_too_big_is_shrunk_to_screen(self):
+        self.assertEqual(self.safe("3000x2000+0+0"), "1920x1080+0+0")
+
+    def test_off_screen_position_is_dropped(self):
+        self.assertEqual(self.safe("700x800+2500+40"), "700x800")
+        self.assertEqual(self.safe("700x800+-300+40"), "700x800")
+
+    def test_damaged_setting_uses_default(self):
+        for bad in ["", "hello", "700x800", "axb+1+2", 42, None]:
+            self.assertEqual(self.safe(bad), "560x680")
+
+    def test_quit_saves_geometry(self):
+        window = self.gui["window"]
+        window.update()
+        expected = window.geometry()
+        self.gui["quit_app"]()
+        # The window is gone now, so tearDown mustn't destroy it again.
+        del self.gui["window"]
+        self.assertEqual(storage.load_setting("window_geometry", None), expected)
+
+    def test_x_button_runs_quit_app(self):
+        self.assertIn("quit_app", self.gui["window"].protocol("WM_DELETE_WINDOW"))
+
+
+class TestGuiStartsAtSavedSize(GuiTestBase):
+
+    SAVED_SETTINGS = {"window_geometry": "620x700+50+60"}
+
+    def test_window_opens_at_saved_size(self):
+        window = self.gui["window"]
+        window.update()
+        self.assertEqual(window.winfo_width(), 620)
+        self.assertEqual(window.winfo_height(), 700)
+
+
+# ---------------------------------------------------------------------------
+# The app icon
+# ---------------------------------------------------------------------------
+class TestGuiIcon(GuiTestBase):
+
+    def test_icon_file_exists(self):
+        self.assertTrue(self.gui["ICON_FILE"].exists())
+
+    def test_icon_is_loaded(self):
+        icon = self.gui["app_icon"]
+        self.assertEqual((icon.width(), icon.height()), (256, 256))
+
+    def test_missing_icon_does_not_crash(self):
+        # Start the app again with ICON_FILE pointing at a file that isn't
+        # there. Swap the line that sets it before running the code.
+        self.gui["window"].destroy()
+        code = Path("trackerapp_gui.py").read_text(encoding="utf-8")
+        code = code.replace('storage.FOLDER / "icon.png"', 'storage.FOLDER / "no_such_icon.png"')
+        self.gui = {}
+        exec(code, self.gui)
+        self.assertNotIn("app_icon", self.gui)
+        self.assertTrue(self.gui["window"].winfo_exists())
+
+
+# ---------------------------------------------------------------------------
+# Friendly error pop-ups: a damaged save file at startup, and unexpected bugs
+# ---------------------------------------------------------------------------
+class TestGuiErrors(GuiTestBase):
+
+    # Helper: start the app again from the top, the way the test setup does.
+    def restart_app(self):
+        self.gui["window"].destroy()
+        self.gui = {}
+        exec(Path("trackerapp_gui.py").read_text(encoding="utf-8"), self.gui)
+
+    def test_damaged_file_shows_pop_up_and_stops(self):
+        broken_text = '[{"name": "Westfield Mall", "doors": ['
+        storage.project_list.clear()
+        storage.PROJECTS_FILE.write_text(broken_text, encoding="utf-8")
+        # redirect_stdout hides the message the app also prints.
+        with contextlib.redirect_stdout(io.StringIO()):
+            with self.assertRaises(SystemExit):
+                self.restart_app()
+        self.assertEqual(len(self.errors), 1)
+        self.assertIn("projects.json", self.errors[0])
+        self.assertIn("Nothing has been changed", self.errors[0])
+        # The damaged file was left exactly as it was.
+        self.assertEqual(storage.PROJECTS_FILE.read_text(encoding="utf-8"), broken_text)
+
+    def test_file_that_is_not_text_gives_load_error(self):
+        storage.project_list.clear()
+        storage.PROJECTS_FILE.write_bytes(b"\xff\xfe\x00 not text")
+        with self.assertRaises(storage.LoadError):
+            storage.load_projects()
+
+    def test_crash_in_a_button_shows_pop_up(self):
+        # A button whose function has a bug (dividing by zero).
+        button = ttk.Button(self.gui["window"], command=lambda: 1 / 0)
+        # redirect_stderr hides the error details printed to the terminal.
+        with contextlib.redirect_stderr(io.StringIO()):
+            button.invoke()
+        self.assertEqual(len(self.errors), 1)
+        self.assertIn("division by zero", self.errors[0])
 
 
 # ---------------------------------------------------------------------------
