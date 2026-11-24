@@ -268,7 +268,8 @@ def open_add_door():
 
     # --- Row 4: Save Door and Cancel buttons ---
     # sticky="e" lines Save Door up on the right (e = east), next to Cancel.
-    ttk.Button(add_window, text="Save Door", command=save_door).grid(row=4, column=1, sticky="e", pady=10)
+    # Save Door is the main action here, so it gets the blue Accent style.
+    ttk.Button(add_window, text="Save Door", command=save_door, style="Accent.TButton").grid(row=4, column=1, sticky="e", pady=10)
     # Cancel just closes the window. new_door was never added to the project,
     # so nothing is saved.
     ttk.Button(add_window, text="Cancel", command=add_window.destroy).grid(row=4, column=2, pady=10)
@@ -659,7 +660,8 @@ def open_project_window(project=None):
         show_project(saved_project)
         project_window.destroy()
 
-    ttk.Button(project_window, text="Save", command=save_project).grid(row=4, column=1, sticky="e", pady=10)
+    # Save is the main action here, so it gets the blue Accent style.
+    ttk.Button(project_window, text="Save", command=save_project, style="Accent.TButton").grid(row=4, column=1, sticky="e", pady=10)
     ttk.Button(project_window, text="Cancel", command=project_window.destroy).grid(row=4, column=2, padx=10, pady=10)
 
 
@@ -748,7 +750,10 @@ window.geometry("560x680")   # width x height in pixels (wide enough for the pro
 # or it freezes.
 button_frame = ttk.Frame(window)
 button_frame.pack(side="bottom", fill="x", padx=10, pady=(0, 10))
-ttk.Button(button_frame, text="Add Door", command=open_add_door).pack(side="left")
+# style="Accent.TButton" is sv_ttk's blue button. Use it only for the main
+# action in each window, so the eye goes straight to it. Every other button
+# stays the normal gray.
+ttk.Button(button_frame, text="Add Door", command=open_add_door, style="Accent.TButton").pack(side="left")
 
 # padx=(10, 0) puts 10 pixels of space on the left of the button, none on the right.
 ttk.Button(button_frame, text="Edit Door", command=open_edit_door).pack(side="left", padx=(10, 0))
