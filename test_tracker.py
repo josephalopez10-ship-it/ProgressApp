@@ -1830,10 +1830,10 @@ class TestPrintsImport(unittest.TestCase):
         rows = prints_import.find_schedule_rows(SAMPLE_SCHEDULE_PAGES)
         # 6 access control rows (one repeat dropped) + 4 alarm rows.
         self.assertEqual(len(rows), 10)
-        self.assertEqual(rows[0], {"system": "ACCESS CONTROL", "door": "120.3", "type": "CARD READER",
-                                   "code": "CCS40C", "id": "067"})
+        self.assertEqual(rows[0], {"system": "ACCESS CONTROL", "building": "PHX53", "door": "120.3",
+                                   "type": "CARD READER", "code": "CCS40C", "id": "067"})
         # The alarm row's extra column doesn't throw it off.
-        self.assertIn({"system": "ALARM", "door": "G102", "type": "DOOR/GATE CONTACT",
+        self.assertIn({"system": "ALARM", "building": "PHX53", "door": "G102", "type": "DOOR/GATE CONTACT",
                        "code": "MFG00A", "id": "001"}, rows)
 
     def test_door_number_stuck_to_the_cell_before(self):
@@ -1844,14 +1844,17 @@ class TestPrintsImport(unittest.TestCase):
         # Sorted like a person would: gates (letters) first, then by number.
         self.assertEqual(names, ["G102", "102.1", "120.3", "132.4", "151.2"])
 
-    def test_two_of_the_same_device_get_their_ids(self):
+    def test_schedule_devices_get_their_label(self):
+        # The label is building-door type-device ID, as on the floor plans,
+        # so two card readers on one door still get different names.
         devices = list(self.doors()["120.3"].devices)
-        self.assertEqual(devices[:2], ["Card Reader 067", "Card Reader 068"])
+        self.assertEqual(devices[:2], ["Card Reader (PHX53-CCS40C-067)", "Card Reader (PHX53-CCS40C-068)"])
 
     def test_door_type_adds_hardware(self):
         # CFS31X = card in, free out, single leaf, electrified panic w/ REX.
+        # Those come from the code, not a schedule row, so they have no label.
         self.assertEqual(list(self.doors()["132.4"].devices),
-                         ["Card Reader", "Electrified Panic", "REX", "Door Contact"])
+                         ["Card Reader (PHX53-CFS31X-193)", "Electrified Panic", "REX", "Door Contact"])
 
     def test_alarm_points_are_left_out_and_nothing_is_doubled(self):
         devices = list(self.doors()["102.1"].devices)
@@ -1859,12 +1862,13 @@ class TestPrintsImport(unittest.TestCase):
         # The code CCD15G adds a biometric reader, but the schedule already
         # has the iris reader, so it isn't added twice.
         self.assertNotIn("Biometric Reader", devices)
-        self.assertEqual(devices, ["Iris Reader", "Mortise Lock", "Emergency Release", "Anti-Tailgate",
-                                   "Alarm Sounder", "Door Contact", "Door Contact (Leaf B)"])
+        self.assertEqual(devices, ["Iris Reader (PHX53-CCD15G-210)", "Mortise Lock", "Emergency Release",
+                                   "Anti-Tailgate", "Alarm Sounder", "Door Contact", "Door Contact (Leaf B)"])
 
     def test_monitored_gate_has_no_mechanical_lock(self):
         # MFG00A = monitored gate with a mechanical lock (nothing to wire).
-        self.assertEqual(list(self.doors()["G102"].devices), ["Door Contact", "Alarm Sounder"])
+        self.assertEqual(list(self.doors()["G102"].devices),
+                         ["Door Contact (PHX53-MFG00A-001)", "Alarm Sounder (PHX53-MFG00A-001)"])
 
     def test_every_device_starts_pending(self):
         for door in self.doors().values():
@@ -1917,8 +1921,8 @@ class TestPrintsImport(unittest.TestCase):
         self.assertEqual(project.name, "PHX53")
         self.assertEqual(len(project.doors), 170)
         self.assertEqual(list(project.find_door("120.3").devices),
-                         ["Card Reader 067", "Card Reader 068", "Delayed Egress", "Electrified Panic",
-                          "Anti-Tailgate", "Door Contact"])
+                         ["Card Reader (PHX53-CCS40C-067)", "Card Reader (PHX53-CCS40C-068)",
+                          "Delayed Egress (PHX53-MDE-063)", "Electrified Panic", "Anti-Tailgate", "Door Contact"])
 
 
 class TestGuiImportPrints(GuiTestBase):

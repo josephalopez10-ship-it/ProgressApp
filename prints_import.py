@@ -15,6 +15,12 @@
 # Tailgating Alarm"), and plain mechanical locks are left out, since there's
 # nothing for the security installer to wire. Every device starts as P.
 #
+# Devices from the schedules get their label in their name, the same label
+# that's printed next to the device on the floor plans: building, door type
+# and device ID, like "Card Reader (PHX53-CCD15B-071)". Devices that only
+# come from the door type code (locks, REX...) have no label in the prints,
+# so they're just named, like "REX".
+#
 # This understands the schedule layout and door type legend used on the
 # PHX53 drawings. Other designers lay their schedules out differently, so a
 # different set of prints may need this file adjusted.
@@ -204,8 +210,8 @@ def read_pdf_text(pdf_path, pages=None):
 
 # Find every schedule row in the pages' text.
 # Gives back a list of dictionaries, one per device row, like
-#   {"system": "ACCESS CONTROL", "door": "162.1.2", "type": "CARD READER",
-#    "code": "CFD16X", "id": "050"}
+#   {"system": "ACCESS CONTROL", "building": "PHX53", "door": "162.1.2",
+#    "type": "CARD READER", "code": "CFD16X", "id": "050"}
 # Rows that appear twice in the PDF (it happens) are only kept once.
 def find_schedule_rows(pages):
     rows = []
@@ -245,6 +251,8 @@ def read_row(cells, start):
             door = cells[position - 3].split()[-1]
             return {
                 "system": cells[start],
+                # The BLDG column, right after the system name.
+                "building": cells[start + 1],
                 "door": door,
                 "type": cells[position - 2],
                 "code": cells[position - 1],
@@ -296,11 +304,17 @@ def door_sort_key(door_number):
     return key
 
 
+# The device's label, as printed on the floor plans: building, door type
+# code and device ID joined with dashes, like "PHX53-CCD15B-071".
+def device_label(row):
+    return f"{row['building']}-{row['code']}-{row['id']}"
+
+
 # Build the doors from the schedule rows.
 # Gives back a list of Door objects, sorted by door number, with every
 # device set to P (pending).
 def build_doors(rows):
-    # For each door number: the schedule devices, as (name, device ID) pairs,
+    # For each door number: the schedule devices, as (name, label) pairs,
     # and the door type codes seen on its rows.
     schedule_devices = {}
     door_codes = {}
@@ -318,21 +332,17 @@ def build_doors(rows):
         # .get(x, default): the app's name for it, or the schedule's own
         # words in Title Case if it isn't in DEVICE_NAMES.
         name = DEVICE_NAMES.get(row["type"], row["type"].title())
-        schedule_devices[door].append((name, row["id"]))
+        schedule_devices[door].append((name, device_label(row)))
 
     doors = []
     for door_number in sorted(schedule_devices, key=door_sort_key):
         door = Door(door_number)
 
-        # 1. Devices from the schedule. When a door has two of the same
-        # device (a card reader on each side), add the device ID to tell
-        # them apart: "Card Reader 067" and "Card Reader 068".
-        names = [name for name, device_id in schedule_devices[door_number]]
-        for name, device_id in schedule_devices[door_number]:
-            if names.count(name) > 1:
-                door.devices[f"{name} {device_id}"] = "P"
-            else:
-                door.devices[name] = "P"
+        # 1. Devices from the schedule, with their label in the name, like
+        # "Card Reader (PHX53-CCD15B-071)". The label includes the device ID,
+        # so two card readers on one door still get different names.
+        for name, label in schedule_devices[door_number]:
+            door.devices[f"{name} ({label})"] = "P"
 
         # 2. Devices from the door type code, unless the schedule already
         # gave the door one of them.
@@ -352,13 +362,13 @@ def build_doors(rows):
 # True if the door already has this device (or one that counts as the
 # same thing), so the door type code doesn't add a second one.
 def already_has(door, name):
-    for existing in door.devices:
-        # "Card Reader 067" counts as a "Card Reader".
-        if existing == name or existing.startswith(name + " "):
-            return True
     # The schedule calls the biometric reader an "Iris Reader".
-    if name == "Biometric Reader" and door.find_device("Iris Reader") is not None:
-        return True
+    if name == "Biometric Reader":
+        name = "Iris Reader"
+    for existing in door.devices:
+        # "Card Reader (PHX53-CCD15B-071)" counts as a "Card Reader".
+        if existing == name or existing.startswith(name + " ("):
+            return True
     return False
 
 
