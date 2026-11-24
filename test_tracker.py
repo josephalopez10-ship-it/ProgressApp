@@ -422,6 +422,38 @@ class TestGuiAddDoor(GuiTestBase):
         self.click_table(x + 20, y + height // 2)
         self.assertEqual(tree.selection(), (door_row,))
 
+    # Helper: select Joes Door, then click a widget in the main window.
+    def click_after_selecting(self, widget):
+        tree = self.app.tree
+        tree.selection_set(tree.get_children()[0])
+        widget.update()
+        widget.event_generate("<Button-1>", x=5, y=5)
+        widget.event_generate("<ButtonRelease-1>", x=5, y=5)
+        widget.update()
+        return tree.selection()
+
+    def test_clicking_blank_parts_of_the_window_unselects(self):
+        # The summary text, the progress bar, and the window's background.
+        for widget in [self.app.summary_label, self.app.progress_bar, self.app.window,
+                       self.app.status_label]:
+            self.assertEqual(self.click_after_selecting(widget), (), widget.winfo_class())
+
+    def test_clicking_buttons_and_boxes_keeps_the_selection(self):
+        # The search box keeps it, and so do buttons: Delete Door needs to
+        # know which door is selected. (The buttons' own clicks are tested
+        # elsewhere; this only checks the click doesn't unselect.)
+        self.assertEqual(len(self.click_after_selecting(self.app.search_entry)), 1)
+        # A button: pressing the mouse down on Edit Door (without letting go,
+        # so the Edit window doesn't open) leaves the selection alone.
+        edit_button = [w for frame in self.app.window.winfo_children() if frame.winfo_class() == "TFrame"
+                       for w in frame.winfo_children()
+                       if w.winfo_class() == "TButton" and w.cget("text") == "Edit Door"][0]
+        tree = self.app.tree
+        tree.selection_set(tree.get_children()[0])
+        edit_button.update()
+        edit_button.event_generate("<Button-1>", x=5, y=5)
+        self.assertEqual(len(tree.selection()), 1)
+
     def test_clicking_a_heading_keeps_the_selection(self):
         tree = self.app.tree
         door_row = tree.get_children()[0]

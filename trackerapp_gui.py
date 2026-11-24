@@ -98,6 +98,13 @@ FILTER_CHOICES = {
     "Restrained": "R",
 }
 
+# Kinds of widgets that are just "blank space" in the main window: frames,
+# labels, the line above the status bar, and the progress bar. (The window's
+# own background counts too; window_clicked checks for that separately.) Clicking one of these unselects the table's rows (see
+# window_clicked). Buttons, boxes and dropdowns aren't listed, because
+# clicking Edit Door or Delete Door needs the selection to stay.
+BLANK_WIDGETS = ["TFrame", "TLabel", "TSeparator", "TProgressbar"]
+
 # The heading text of each table column, without the sort arrow.
 COLUMN_TITLES = {"#0": "Door / Device", "devices": "Devices", "status": "Status"}
 
@@ -513,6 +520,9 @@ class TrackerApp:
         self.window.bind("<Control-n>", lambda event: self.open_add_door())
         self.window.bind("<Control-f>", lambda event: self.focus_search())
         self.window.bind("<Control-q>", lambda event: self.quit_app())
+        # A click anywhere in the main window comes here first, so clicks on
+        # blank space can unselect the table's rows (see window_clicked).
+        self.window.bind("<Button-1>", self.window_clicked)
 
     # -----------------------------------------------------------------------
     # Saving and the status bar
@@ -872,6 +882,16 @@ class TrackerApp:
         if self.tree.identify_region(event.x, event.y) == "nothing":
             # selection_remove() unselects the rows it's given; selection()
             # is every selected row.
+            self.tree.selection_remove(self.tree.selection())
+
+    # Runs on every click anywhere in the main window (not the pop-ups,
+    # which are separate windows). If the click was on blank space, like the
+    # background or the summary, unselect the table's rows.
+    # event.widget is the widget that was clicked, and winfo_class() says
+    # what kind it is: "TButton", "TLabel", "TFrame"...
+    def window_clicked(self, event):
+        # "event.widget is self.window" means the window's own background.
+        if event.widget is self.window or event.widget.winfo_class() in BLANK_WIDGETS:
             self.tree.selection_remove(self.tree.selection())
 
     # Runs when a row in the table is double-clicked: open the Edit window
