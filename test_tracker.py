@@ -1375,6 +1375,82 @@ class TestGuiSearch(GuiTestBase):
 
 
 # ---------------------------------------------------------------------------
+# Sorting by clicking a column heading
+# ---------------------------------------------------------------------------
+class TestGuiSort(GuiTestBase):
+
+    SAVED_DOORS = [
+        {"name": "stair 2", "devices": {"Lock": "C", "REX": "P"}},           # P, 1 / 2
+        {"name": "Loading Dock", "devices": {"Restraint": "R"}},             # R, 0 / 1
+        {"name": "Main Lobby", "devices": {"Lock": "C"}},                    # C, 1 / 1
+        {"name": "Empty Door", "devices": {}},                               # P, —
+    ]
+    SAVED_ORDER = ["stair 2", "Loading Dock", "Main Lobby", "Empty Door"]
+
+    def shown(self):
+        tree = self.gui["tree"]
+        return [tree.item(row, "text") for row in tree.get_children()]
+
+    # Helper: click a column heading.
+    def click(self, column):
+        self.gui["heading_clicked"](column)
+
+    def heading(self, column):
+        return self.gui["tree"].heading(column, "text")
+
+    def test_starts_in_saved_order(self):
+        self.assertEqual(self.shown(), self.SAVED_ORDER)
+
+    def test_sort_by_name_ignores_case(self):
+        self.click("#0")
+        self.assertEqual(self.shown(), ["Empty Door", "Loading Dock", "Main Lobby", "stair 2"])
+        self.assertEqual(self.heading("#0"), "Door / Device  ▲")
+
+    def test_second_click_reverses(self):
+        self.click("#0")
+        self.click("#0")
+        self.assertEqual(self.shown(), ["stair 2", "Main Lobby", "Loading Dock", "Empty Door"])
+        self.assertEqual(self.heading("#0"), "Door / Device  ▼")
+
+    def test_third_click_goes_back_to_saved_order(self):
+        for _ in range(3):
+            self.click("#0")
+        self.assertEqual(self.shown(), self.SAVED_ORDER)
+        self.assertEqual(self.heading("#0"), "Door / Device")
+
+    def test_sort_by_status_puts_problems_first(self):
+        self.click("status")
+        # Pending doors keep their saved order between themselves.
+        self.assertEqual(self.shown(), ["Loading Dock", "stair 2", "Empty Door", "Main Lobby"])
+
+    def test_sort_by_devices_done(self):
+        self.click("devices")
+        self.assertEqual(self.shown(), ["Empty Door", "Loading Dock", "stair 2", "Main Lobby"])
+
+    def test_clicking_another_column_moves_the_arrow(self):
+        self.click("#0")
+        self.click("status")
+        self.assertEqual(self.heading("#0"), "Door / Device")
+        self.assertEqual(self.heading("status"), "Status  ▲")
+
+    def test_sorting_does_not_change_saved_order(self):
+        self.click("#0")
+        names = [door.name for door in self.doors()]
+        self.assertEqual(names, self.SAVED_ORDER)
+
+    def test_heading_click_is_connected(self):
+        # Run the heading's real command, to check the click is wired up.
+        self.gui["tree"].tk.call(self.gui["tree"].heading("status", "command"))
+        self.assertEqual(self.heading("status"), "Status  ▲")
+
+    def test_sort_stays_after_adding_a_door(self):
+        self.click("#0")
+        self.doors().append(Door("Annex"))
+        self.gui["refresh_tree"]()
+        self.assertEqual(self.shown()[0], "Annex")
+
+
+# ---------------------------------------------------------------------------
 # Keyboard shortcuts (Enter, Escape, Delete, Ctrl+N)
 # ---------------------------------------------------------------------------
 class TestGuiShortcuts(GuiTestBase):

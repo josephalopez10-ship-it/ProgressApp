@@ -67,6 +67,21 @@ FILTER_CHOICES = {
 # changed by show_project() when another project is picked.
 current_project = None
 
+# How the table is sorted. Clicking a column heading changes these:
+#   sort_column  = which column: "#0" (name), "devices", "status", or None
+#                  for "not sorted" (doors in the order they were added).
+#   sort_reverse = False for A to Z / lowest first, True for the opposite.
+# Sorting only changes the order on screen. The saved order never changes.
+sort_column = None
+sort_reverse = False
+
+# The heading text of each column, without the sort arrow.
+COLUMN_TITLES = {"#0": "Door / Device", "devices": "Devices", "status": "Status"}
+
+# The order doors go in when sorted by Status: problems first, so restrained
+# doors are at the top, then pending, then complete.
+STATUS_SORT_ORDER = {"R": 0, "P": 1, "C": 2}
+
 
 # Clear the table and fill it again from the current project's doors.
 # Call this whenever a door is added, edited, or removed, so the table always matches the saved data.
@@ -78,7 +93,9 @@ def refresh_tree():
     # Count the doors that pass the search and filter, for the "Showing"
     # message under the search box.
     shown = 0
-    for door in current_project.doors:
+    # sorted_doors() gives the doors in the order picked by clicking a column
+    # heading (or the saved order, if no heading was clicked).
+    for door in sorted_doors():
         # Skip doors that don't match what's typed in the search box or
         # picked in the Show dropdown. continue jumps to the next door.
         if not door_matches(door):
@@ -125,6 +142,66 @@ def refresh_tree():
     # Update the totals at the top. They always count the WHOLE project,
     # even when the search hides some doors.
     refresh_summary()
+
+
+# Give back the current project's doors in the order picked by clicking a
+# column heading. It makes a NEW sorted list; current_project.doors itself is
+# left alone, so the saved order never changes.
+def sorted_doors():
+    if sort_column is None:
+        return current_project.doors
+    # sorted() needs to know WHAT to compare for each door. key=sort_key
+    # hands it a function that turns a door into something comparable,
+    # like its name or a number. reverse=True flips the order.
+    return sorted(current_project.doors, key=sort_key, reverse=sort_reverse)
+
+
+# Turn a door into the value it's sorted by, for the column being sorted.
+# sorted() calls this once for each door.
+def sort_key(door):
+    if sort_column == "#0":
+        # .lower() so "alex door" goes between "Abbey" and "Bank", not after
+        # every capitalized name.
+        return door.name.lower()
+    if sort_column == "devices":
+        # Sort by how far along the door is, as a fraction: 3 / 4 = 0.75.
+        # A door with nothing to count goes first, as -1.
+        done, total = door.progress()
+        if total == 0:
+            return -1
+        return done / total
+    # Otherwise it's the Status column: restrained, then pending, then complete.
+    return STATUS_SORT_ORDER[door.status()]
+
+
+# Runs when a column heading is clicked. Each click on the same heading
+# goes: A to Z -> Z to A -> back to unsorted. Clicking a different heading
+# starts that one at A to Z.
+def heading_clicked(column):
+    global sort_column, sort_reverse
+    if column != sort_column:
+        sort_column = column
+        sort_reverse = False
+    elif not sort_reverse:
+        sort_reverse = True
+    else:
+        sort_column = None
+        sort_reverse = False
+    refresh_headings()
+    refresh_tree()
+
+
+# Put a small arrow on the sorted column's heading: ▲ for A to Z,
+# ▼ for Z to A. The other headings show just their title.
+def refresh_headings():
+    # .items() gives each column's id and its title together.
+    for column, title in COLUMN_TITLES.items():
+        if column == sort_column and sort_reverse:
+            tree.heading(column, text=f"{title}  ▼")
+        elif column == sort_column:
+            tree.heading(column, text=f"{title}  ▲")
+        else:
+            tree.heading(column, text=title)
 
 
 # Check one door against the search box and the Show dropdown.
@@ -972,9 +1049,12 @@ filter_label.pack(side="top", anchor="w", padx=10)
 # columns=("devices", "status") adds two more columns. refresh_tree()
 # fills them in this same order.
 tree = ttk.Treeview(window, columns=("devices", "status"))
-tree.heading("#0", text="Door / Device")
-tree.heading("devices", text="Devices")
-tree.heading("status", text="Status")
+# Clicking a heading sorts the table by that column (see heading_clicked).
+# command= needs a function that takes nothing, so each lambda remembers
+# which column it's for and passes it on to heading_clicked().
+tree.heading("#0", text=COLUMN_TITLES["#0"], command=lambda: heading_clicked("#0"))
+tree.heading("devices", text=COLUMN_TITLES["devices"], command=lambda: heading_clicked("devices"))
+tree.heading("status", text=COLUMN_TITLES["status"], command=lambda: heading_clicked("status"))
 # How many of the door's devices are complete, like "3 / 4".
 tree.column("devices", width=80, anchor="center")
 # width=100 leaves room for the longest word, "Restrained".
