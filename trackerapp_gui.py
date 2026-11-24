@@ -40,6 +40,8 @@ import traceback
 # datetime gives the date AND time, used for "saved at 3:42 PM" in the
 # status bar.
 from datetime import date, datetime
+# Path is a built-in tool for working with file locations.
+from pathlib import Path
 # The Door class, to create new doors, the list of allowed status letters,
 # and STATUS_NAMES, which turns a letter into a word ("C" -> "Complete").
 from door import Door, VALID_STATUSES, STATUS_NAMES
@@ -50,6 +52,9 @@ import report
 # Our own storage.py, which loads and saves every project.
 # We write storage.project_list, storage.save_projects(), and so on.
 import storage
+# Our own prints_import.py, which reads a PDF of the drawings and builds a
+# project's doors and devices from its schedules.
+import prints_import
 
 
 # ---------------------------------------------------------------------------
@@ -309,6 +314,7 @@ class TrackerApp:
 
         self.file_menu = tk.Menu(self.menu_bar, tearoff=False)
         self.file_menu.add_command(label="New Project...", command=self.new_project)
+        self.file_menu.add_command(label="Import from Prints (PDF)...", command=self.import_prints)
         self.file_menu.add_separator()   # a thin line between groups of items
         self.file_menu.add_command(label="Export Text Report...", command=self.export_text)
         self.file_menu.add_command(label="Export PDF Report...", command=self.export_pdf)
@@ -440,7 +446,12 @@ class TrackerApp:
         # folders. Column "#0" is the built-in first column (door or device
         # name). columns=("devices", "status") adds two more columns, and
         # refresh_tree() fills them in this same order.
-        self.tree = ttk.Treeview(self.window, columns=("devices", "status"))
+        # The table and its scrollbar share a Frame, so the scrollbar sits
+        # right beside the table. fill="both" + expand=True make the frame
+        # (and the table in it) grow with the window.
+        table_frame = ttk.Frame(self.window)
+        table_frame.pack(fill="both", expand=True, padx=10, pady=10)
+        self.tree = ttk.Treeview(table_frame, columns=("devices", "status"))
         # Clicking a heading sorts the table by that column (see
         # heading_clicked). command= needs a function that takes nothing, so
         # each lambda remembers which column it's for and passes it on.
@@ -451,8 +462,14 @@ class TrackerApp:
         self.tree.column("devices", width=80, anchor="center")
         # width=100 leaves room for the longest word, "Restrained".
         self.tree.column("status", width=100, anchor="center")
-        # fill="both" + expand=True make the table grow with the window.
-        self.tree.pack(fill="both", expand=True, padx=10, pady=10)
+        # A scrollbar on the right, for projects with hundreds of doors.
+        # They're connected both ways: dragging the scrollbar scrolls the
+        # table (command=yview), and scrolling the table with the mouse
+        # wheel moves the scrollbar (yscrollcommand=set).
+        scrollbar = ttk.Scrollbar(table_frame, orient="vertical", command=self.tree.yview)
+        scrollbar.pack(side="right", fill="y")
+        self.tree.config(yscrollcommand=scrollbar.set)
+        self.tree.pack(side="left", fill="both", expand=True)
 
         # Double-clicking a door (or one of its devices) opens the Edit
         # window. "<Double-1>" means a double-click with mouse button 1 (the
@@ -1361,6 +1378,103 @@ class TrackerApp:
 
         # Everything's in place: center the window over the app and show it.
         self.show_popup(project_window)
+
+    # Runs for File > Import from Prints (PDF): pick a PDF of the drawings,
+    # read its schedules, and show what was found before making the project.
+    def import_prints(self):
+        # askopenfilename() opens the standard "Open" window. It gives back
+        # the chosen file, or "" if Cancel was clicked.
+        pdf_path = filedialog.askopenfilename(parent=self.window, title="Choose the drawings (PDF)",
+                                              filetypes=[("PDF files", "*.pdf"), ("All files", "*")])
+        if not pdf_path:
+            return
+
+        # Reading takes a moment, so show the "busy" mouse pointer meanwhile.
+        # update() makes tkinter show it now, before the work starts.
+        self.window.config(cursor="watch")
+        self.set_status("Reading the prints...")
+        self.window.update()
+        try:
+            project = prints_import.import_prints(pdf_path)
+        except prints_import.PrintsImportError as error:
+            messagebox.showerror("Can't import these prints", str(error), parent=self.window)
+            self.set_status("Import cancelled")
+            return
+        finally:
+            # "finally" runs whether it worked or not: always put the
+            # normal mouse pointer back.
+            self.window.config(cursor="")
+
+        self.set_status("Ready")
+        self.open_import_preview(project, pdf_path)
+
+    # Show the doors and devices read from the prints, with a box for the
+    # project's name. Create Project saves them as a new project.
+    def open_import_preview(self, project, pdf_path):
+        preview_window = tk.Toplevel(self.window)
+        preview_window.title("Import from Prints")
+        self.setup_popup(preview_window)
+
+        device_count = sum(len(door.devices) for door in project.doors)
+        # Path(...).name keeps just the file name from the full path, like
+        # "PHX53_Drawings.pdf".
+        file_name = Path(pdf_path).name
+        ttk.Label(preview_window,
+                  text=f"Found {len(project.doors)} doors and {device_count} devices in {file_name}.\n"
+                       "Every device starts as Pending. Check the list, then create the project.",
+                  justify="left").grid(row=0, column=0, columnspan=3, sticky="w", padx=10, pady=(5, 10))
+
+        # The new project's name, filled in with the guess from the prints.
+        ttk.Label(preview_window, text="Project name:").grid(row=1, column=0, sticky="w", padx=10, pady=5)
+        name_entry = ttk.Entry(preview_window, width=35)
+        name_entry.insert(0, project.name)
+        name_entry.grid(row=1, column=1, columnspan=2, sticky="w", padx=10, pady=5)
+
+        # A read-only list of the doors; click a door's arrow to see its
+        # devices. The Devices column shows how many each door has.
+        preview_tree = ttk.Treeview(preview_window, columns=("count",), height=14)
+        preview_tree.heading("#0", text="Door / Device")
+        preview_tree.heading("count", text="Devices")
+        preview_tree.column("#0", width=320)
+        preview_tree.column("count", width=80, anchor="center")
+        for door in project.doors:
+            door_row = preview_tree.insert("", "end", text=door.name, values=(len(door.devices),))
+            for device_name in door.devices:
+                preview_tree.insert(door_row, "end", text=device_name, values=("",))
+        preview_tree.grid(row=2, column=0, columnspan=3, sticky="we", padx=(10, 0), pady=5)
+        # A scrollbar beside the list, since there can be hundreds of doors.
+        # The two are connected both ways: the scrollbar scrolls the list,
+        # and the list moves the scrollbar when scrolled with the mouse wheel.
+        scrollbar = ttk.Scrollbar(preview_window, orient="vertical", command=preview_tree.yview)
+        scrollbar.grid(row=2, column=3, sticky="ns", padx=(0, 10), pady=5)
+        preview_tree.config(yscrollcommand=scrollbar.set)
+
+        # Runs when Create Project is clicked.
+        def create_project():
+            name = name_entry.get().strip()
+            if name == "":
+                messagebox.showerror("Missing name", "Project name cannot be blank.", parent=preview_window)
+                return
+            if storage.find_project(name) is not None:
+                messagebox.showerror("Duplicate project", f"{name} already exists.", parent=preview_window)
+                return
+            project.name = name
+            storage.project_list.append(project)
+            self.save_changes(f"Imported {len(project.doors)} doors into {name}")
+            # Switch to the new project so its doors show straight away.
+            self.show_project(project)
+            preview_window.destroy()
+
+        # Enter in the name box creates the project, like clicking the button.
+        name_entry.bind("<Return>", lambda event: create_project())
+        name_entry.focus_set()
+
+        ttk.Button(preview_window, text="Create Project", command=create_project,
+                   style="Accent.TButton").grid(row=3, column=1, sticky="e", pady=10)
+        ttk.Button(preview_window, text="Cancel", command=preview_window.destroy).grid(row=3, column=2,
+                                                                                       padx=10, pady=10)
+
+        self.show_popup(preview_window)
 
     # Runs for the New button next to the dropdown, and File > New Project.
     def new_project(self):

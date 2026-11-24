@@ -4,3 +4,6 @@ __pycache__/
 door_list.json
 projects.json
 settings.json
+
+# Customer drawing sets (prints) - never commit these.
+PHX53_Drawings.pdf

@@ -32,6 +32,7 @@ from project import Project
 import storage
 import report
 import install_launcher
+import prints_import
 import trackerapp_gui
 
 
@@ -1785,6 +1786,212 @@ class TestLauncher(unittest.TestCase):
             entry_file.write_text("\n".join(self.entry_lines()) + "\n", encoding="utf-8")
             result = subprocess.run(["desktop-file-validate", str(entry_file)], capture_output=True, text=True)
         self.assertEqual(result.stdout + result.stderr, "")
+
+
+# ---------------------------------------------------------------------------
+# prints_import.py: reading doors and devices from a PDF of the drawings
+# ---------------------------------------------------------------------------
+
+# Made-up schedule text in the same layout pdftotext gives for the PHX53
+# riser schedules: cells split by 2+ spaces, sometimes two tables side by
+# side on one line.
+SAMPLE_SCHEDULE_PAGES = [
+    "SECURITY RISER SCHEDULE - ACCESS CONTROL - SER1\n"
+    "SYSTEM  BLDG  LOC  LISC LOC  LNL-1320 LOC  DOOR #  DEVICE TYPE  DOOR TYPE  DEVICE ID  CABLE TYPE\n"
+    # Two rows side by side on one line.
+    "ACCESS CONTROL  PHX53  SER1  SER1.E1  SER1.E2  120.3  CARD READER  CCS40C  067  2C,3D,E,2G  Z-I-03  5"
+    "      ACCESS CONTROL  PHX53  DH01.02.R2  SER1.E1  DH01.02.R2  132.4  CARD READER  CFS31X  193  2C,2D,G  Z-I-05  6\n"
+    "ACCESS CONTROL  PHX53  SER1  SER1.E1  SER1.E2  120.3  CARD READER  CCS40C  068  SEE ASSOC. RDR  Z-I-03  5\n"
+    # The same row again (it happens in real PDFs): kept only once.
+    "ACCESS CONTROL  PHX53  SER1  SER1.E1  SER1.E2  120.3  CARD READER  CCS40C  068  SEE ASSOC. RDR  Z-I-03  5\n"
+    # DOOR # stuck to the cell before it with one space.
+    "ACCESS CONTROL  PHX53  DH01.01.1.R1  SER1.E1  DH01.01.1.R1 151.2  CARD READER  CFS31X  120  2C,2D,G  Z-I-05  6\n"
+    # A rack reader: not a door.
+    "ACCESS CONTROL  PHX53  DH01.02.R2  SER1.E1  DH01.02.R2  DH01.02.R2 Frt  RACK READER  CFR80X  212  A,C,D  Z-I-04  8\n"
+    "ACCESS CONTROL  PHX53  SER1  SER1.E1  SER1.E1  102.1  IRIS READER  CCD15G  210  2A,3C,4D  Z-I-03  3\n",
+    "SECURITY RISER SCHEDULE - ALARM - SER1\n"
+    # Alarm rows have an extra BOARD# column before DOOR #.
+    "ALARM  PHX53  SER1  SER1.E1  SER1.E4  LNL-1100-1  G102  DOOR/GATE CONTACT  MFG00A  001  C  Z-I-07  2\n"
+    "ALARM  PHX53  SER1  SER1.E1  SER1.E4  LNL-1200-1  G102  ALARM SOUNDER  MFG00A  001  D  Z-I-07  2\n"
+    # A software alarm point: left out.
+    "ALARM  PHX53  SER1  SER1.E1  SER1.E1  LNL-1100-3  102.1  ATG TAILGATING ALARM  MAT  211  C  Z-I-11  2\n"
+    # Not a door at all.
+    "ALARM  PHX53  SER1  SER1.E1  SER1.E4  LNL-1100-2  SER1.E1  POWER FAIL  MPF  300  C  Z-I-14  5\n",
+]
+
+
+class TestPrintsImport(unittest.TestCase):
+
+    def doors(self):
+        rows = prints_import.find_schedule_rows(SAMPLE_SCHEDULE_PAGES)
+        return {door.name: door for door in prints_import.build_doors(rows)}
+
+    def test_finds_every_row_once(self):
+        rows = prints_import.find_schedule_rows(SAMPLE_SCHEDULE_PAGES)
+        # 6 access control rows (one repeat dropped) + 4 alarm rows.
+        self.assertEqual(len(rows), 10)
+        self.assertEqual(rows[0], {"system": "ACCESS CONTROL", "door": "120.3", "type": "CARD READER",
+                                   "code": "CCS40C", "id": "067"})
+        # The alarm row's extra column doesn't throw it off.
+        self.assertIn({"system": "ALARM", "door": "G102", "type": "DOOR/GATE CONTACT",
+                       "code": "MFG00A", "id": "001"}, rows)
+
+    def test_door_number_stuck_to_the_cell_before(self):
+        self.assertIn("151.2", self.doors())
+
+    def test_racks_and_panels_are_not_doors(self):
+        names = list(self.doors())
+        # Sorted like a person would: gates (letters) first, then by number.
+        self.assertEqual(names, ["G102", "102.1", "120.3", "132.4", "151.2"])
+
+    def test_two_of_the_same_device_get_their_ids(self):
+        devices = list(self.doors()["120.3"].devices)
+        self.assertEqual(devices[:2], ["Card Reader 067", "Card Reader 068"])
+
+    def test_door_type_adds_hardware(self):
+        # CFS31X = card in, free out, single leaf, electrified panic w/ REX.
+        self.assertEqual(list(self.doors()["132.4"].devices),
+                         ["Card Reader", "Electrified Panic", "REX", "Door Contact"])
+
+    def test_alarm_points_are_left_out_and_nothing_is_doubled(self):
+        devices = list(self.doors()["102.1"].devices)
+        self.assertNotIn("Atg Tailgating Alarm", devices)
+        # The code CCD15G adds a biometric reader, but the schedule already
+        # has the iris reader, so it isn't added twice.
+        self.assertNotIn("Biometric Reader", devices)
+        self.assertEqual(devices, ["Iris Reader", "Mortise Lock", "Emergency Release", "Anti-Tailgate",
+                                   "Alarm Sounder", "Door Contact", "Door Contact (Leaf B)"])
+
+    def test_monitored_gate_has_no_mechanical_lock(self):
+        # MFG00A = monitored gate with a mechanical lock (nothing to wire).
+        self.assertEqual(list(self.doors()["G102"].devices), ["Door Contact", "Alarm Sounder"])
+
+    def test_every_device_starts_pending(self):
+        for door in self.doors().values():
+            self.assertEqual(set(door.devices.values()), {"P"})
+
+    def test_decode_door_type(self):
+        self.assertEqual(prints_import.decode_door_type("CCD15B"),
+                         ["Mortise Lock", "Emergency Release", "Door Contact", "Door Contact (Leaf B)"])
+        self.assertEqual(prints_import.decode_door_type("NMO00X"), ["Door Contact"])
+        # Not a door type code (an alarm point's code).
+        self.assertEqual(prints_import.decode_door_type("MAT"), [])
+
+    def test_guess_project_name(self):
+        self.assertEqual(prints_import.guess_project_name(SAMPLE_SCHEDULE_PAGES), "PHX53")
+        self.assertEqual(prints_import.guess_project_name(["no schedules here"]), "")
+
+    def test_missing_pdftotext_gives_a_clear_message(self):
+        def not_installed(*args, **kwargs):
+            raise FileNotFoundError("pdftotext")
+        real_run = prints_import.subprocess.run
+        prints_import.subprocess.run = not_installed
+        try:
+            with self.assertRaises(prints_import.PrintsImportError) as caught:
+                prints_import.import_prints("prints.pdf")
+        finally:
+            prints_import.subprocess.run = real_run
+        self.assertIn("sudo apt install poppler-utils", str(caught.exception))
+
+    def test_pdf_without_schedules_gives_a_clear_message(self):
+        if shutil.which("pdftotext") is None:
+            self.skipTest("pdftotext isn't installed.")
+        from reportlab.pdfgen import canvas
+        with tempfile.TemporaryDirectory() as folder:
+            pdf_path = Path(folder) / "floor_plan.pdf"
+            page = canvas.Canvas(str(pdf_path))
+            page.drawString(100, 700, "LEVEL 1 FLOOR PLAN")
+            page.save()
+            with self.assertRaises(prints_import.PrintsImportError) as caught:
+                prints_import.import_prints(pdf_path)
+        self.assertIn("No door schedules", str(caught.exception))
+
+    def test_real_phx53_prints(self):
+        # Only runs when the real drawings are in the folder (they're never
+        # committed to git), and pdftotext is installed.
+        pdf_path = Path("PHX53_Drawings.pdf")
+        if not pdf_path.exists() or shutil.which("pdftotext") is None:
+            self.skipTest("PHX53_Drawings.pdf isn't in the folder.")
+        self.assertEqual(prints_import.find_schedule_pages(pdf_path), [73, 74, 75, 76, 77])
+        project = prints_import.import_prints(pdf_path)
+        self.assertEqual(project.name, "PHX53")
+        self.assertEqual(len(project.doors), 170)
+        self.assertEqual(list(project.find_door("120.3").devices),
+                         ["Card Reader 067", "Card Reader 068", "Delayed Egress", "Electrified Panic",
+                          "Anti-Tailgate", "Door Contact"])
+
+
+class TestGuiImportPrints(GuiTestBase):
+
+    def setUp(self):
+        super().setUp()
+        # Pretend the user picked a PDF, and read the sample text instead
+        # of a real one.
+        self.real_askopenfilename = filedialog.askopenfilename
+        filedialog.askopenfilename = lambda **options: "/home/me/PHX53_Drawings.pdf"
+        self.real_import = prints_import.import_prints
+        def fake_import(pdf_path):
+            rows = prints_import.find_schedule_rows(SAMPLE_SCHEDULE_PAGES)
+            return Project("PHX53", doors=prints_import.build_doors(rows))
+        prints_import.import_prints = fake_import
+
+    def tearDown(self):
+        filedialog.askopenfilename = self.real_askopenfilename
+        prints_import.import_prints = self.real_import
+        super().tearDown()
+
+    # Helper: File > Import from Prints, then find the preview's parts.
+    def open_preview(self):
+        self.app.file_menu.invoke("Import from Prints (PDF)...")
+        preview = self.newest_window()
+        widgets = preview.winfo_children()
+        name_entry = [w for w in widgets if type(w) is ttk.Entry][0]
+        tree = [w for w in widgets if isinstance(w, ttk.Treeview)][0]
+        buttons = {w.cget("text"): w for w in widgets if isinstance(w, ttk.Button)}
+        return preview, name_entry, tree, buttons
+
+    def test_main_table_has_a_scrollbar(self):
+        # The table tells its scrollbar where it's scrolled to.
+        self.assertNotEqual(str(self.app.tree.cget("yscrollcommand")), "")
+
+    def test_preview_lists_the_doors(self):
+        preview, name_entry, tree, buttons = self.open_preview()
+        self.assertEqual(preview.title(), "Import from Prints")
+        self.assertEqual(name_entry.get(), "PHX53")
+        self.assertEqual([tree.item(row, "text") for row in tree.get_children()],
+                         ["G102", "102.1", "120.3", "132.4", "151.2"])
+
+    def test_create_project_saves_and_switches_to_it(self):
+        preview, name_entry, tree, buttons = self.open_preview()
+        buttons["Create Project"].invoke()
+        self.assertFalse(preview.winfo_exists())
+        self.assertEqual(self.app.current_project.name, "PHX53")
+        self.assertEqual(len(self.app.current_project.doors), 5)
+        # Saved to projects.json, after the project that was already there.
+        saved = json.loads(storage.PROJECTS_FILE.read_text(encoding="utf-8"))
+        self.assertEqual([project["name"] for project in saved], ["Test Project", "PHX53"])
+        self.assertTrue(self.app.status_label.cget("text").startswith("Imported 5 doors into PHX53"))
+
+    def test_cancel_creates_nothing(self):
+        preview, name_entry, tree, buttons = self.open_preview()
+        buttons["Cancel"].invoke()
+        self.assertEqual(len(storage.project_list), 1)
+
+    def test_duplicate_project_name_is_blocked(self):
+        preview, name_entry, tree, buttons = self.open_preview()
+        name_entry.delete(0, "end")
+        name_entry.insert(0, "test project")
+        buttons["Create Project"].invoke()
+        self.assertEqual(self.errors, ["test project already exists."])
+        self.assertTrue(preview.winfo_exists())
+
+    def test_unreadable_pdf_shows_the_reason(self):
+        def broken_import(pdf_path):
+            raise prints_import.PrintsImportError("No door schedules were found in this PDF.")
+        prints_import.import_prints = broken_import
+        self.app.import_prints()
+        self.assertEqual(self.errors, ["No door schedules were found in this PDF."])
+        self.assertEqual(self.app.window.cget("cursor"), "")
 
 
 # ---------------------------------------------------------------------------
