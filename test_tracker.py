@@ -1262,6 +1262,88 @@ class TestGuiNoProjects(GuiTestBase):
         self.assertEqual(saved[0]["name"], "My First Project")
 
 
+# ---------------------------------------------------------------------------
+# Keyboard shortcuts (Enter, Escape, Delete, Ctrl+N)
+# ---------------------------------------------------------------------------
+class TestGuiShortcuts(GuiTestBase):
+
+    # Helper: press a key on a widget, the way a real key press would.
+    # focus_force() gives the widget the keyboard, and update() lets tkinter
+    # finish drawing first, or the key press can be ignored.
+    def press(self, widget, key):
+        widget.focus_force()
+        widget.update()
+        widget.event_generate(key)
+        widget.update()
+
+    # Helper: the text boxes in a pop-up, in the order they were created.
+    def entries(self, popup):
+        return [w for w in popup.winfo_children() if type(w) is ttk.Entry]
+
+    # Helper: click Joes Door in the main table.
+    def select_joes_door(self):
+        tree = self.gui["tree"]
+        tree.selection_set(tree.get_children()[0])
+        return tree
+
+    def test_escape_closes_add_door_window(self):
+        self.gui["open_add_door"]()
+        add_window = self.newest_window()
+        self.press(add_window, "<Escape>")
+        self.assertFalse(add_window.winfo_exists())
+        self.assertEqual(len(self.doors()), 1)
+
+    def test_add_door_window_starts_in_name_box(self):
+        self.gui["open_add_door"]()
+        add_window = self.newest_window()
+        add_window.update()
+        name_entry = self.entries(add_window)[0]
+        self.assertEqual(add_window.focus_get(), name_entry)
+
+    def test_enter_in_device_box_adds_device(self):
+        self.gui["open_add_door"]()
+        add_window = self.newest_window()
+        name_entry, device_entry = self.entries(add_window)
+        device_entry.insert(0, "Lock")
+        self.press(device_entry, "<Return>")
+        listbox = [w for w in add_window.winfo_children() if isinstance(w, tk.Listbox)][0]
+        self.assertEqual(listbox.get(0, "end"), ("Lock   P",))
+        # The device box is emptied, ready for the next device.
+        self.assertEqual(device_entry.get(), "")
+
+    def test_enter_in_edit_window_adds_device(self):
+        self.select_joes_door()
+        self.gui["open_edit_door"]()
+        edit_window = self.newest_window()
+        name_entry, new_device_entry = self.entries(edit_window)
+        new_device_entry.insert(0, "REX")
+        self.press(new_device_entry, "<Return>")
+        self.assertEqual(self.doors()[0].devices, {"Lock": "P", "REX": "P"})
+
+    def test_enter_in_project_window_saves(self):
+        self.gui["new_project"]()
+        project_window = self.newest_window()
+        name_entry = self.entries(project_window)[0]
+        name_entry.insert(0, "Westfield Mall")
+        self.press(name_entry, "<Return>")
+        self.assertFalse(project_window.winfo_exists())
+        self.assertEqual(self.gui["current_project"].name, "Westfield Mall")
+
+    def test_ctrl_n_opens_add_door_window(self):
+        self.press(self.gui["tree"], "<Control-n>")
+        self.assertEqual(self.newest_window().title(), "Add Door")
+
+    def test_enter_on_table_opens_edit_window(self):
+        tree = self.select_joes_door()
+        self.press(tree, "<Return>")
+        self.assertEqual(self.newest_window().title(), "Edit Door - Joes Door")
+
+    def test_delete_key_deletes_selected_door(self):
+        tree = self.select_joes_door()
+        self.press(tree, "<Delete>")
+        self.assertEqual(self.doors(), [])
+
+
 # This lets you also run the file directly: .venv/bin/python test_tracker.py
 if __name__ == "__main__":
     unittest.main()

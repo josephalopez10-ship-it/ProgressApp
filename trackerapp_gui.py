@@ -173,6 +173,12 @@ def setup_popup(popup):
     popup.wait_visibility()
     # grab_set() stops clicks on the main window until this one is closed.
     popup.grab_set()
+    # Pressing Escape closes the pop-up, the same as Cancel or Close.
+    # bind() runs a function when a key is pressed, and hands it an "event"
+    # with details about the key press. destroy() doesn't take an event, so
+    # "lambda event: popup.destroy()" makes a tiny one-line function that
+    # accepts the event, ignores it, and calls destroy().
+    popup.bind("<Escape>", lambda event: popup.destroy())
 
 
 # Open the "Add Door" window. Runs when the Add Door button is clicked.
@@ -265,6 +271,15 @@ def open_add_door():
         refresh_tree()
         # Close the Add Door window.
         add_window.destroy()
+
+    # --- Keyboard shortcuts ---
+    # "<Return>" is the Enter key. Enter in the name box jumps to the device
+    # box (focus_set() puts the typing cursor there). Enter in the device box
+    # adds the device, so you can type a device, press Enter, type the next...
+    name_entry.bind("<Return>", lambda event: device_entry.focus_set())
+    device_entry.bind("<Return>", lambda event: add_device())
+    # Start with the typing cursor in the name box, ready to type.
+    name_entry.focus_set()
 
     # --- Row 4: Save Door and Cancel buttons ---
     # sticky="e" lines Save Door up on the right (e = east), next to Cancel.
@@ -451,6 +466,15 @@ def open_edit_door():
     # --- Row 6 (right side): Close button ---
     # Changes are already saved, so Close just closes the window.
     ttk.Button(edit_window, text="Close", command=edit_window.destroy).grid(row=6, column=2, padx=10, pady=10)
+
+    # --- Keyboard shortcuts ---
+    # Enter in the name box renames the door; Enter in the new device box
+    # adds the device. (Escape closes the window, set up in setup_popup().)
+    name_entry.bind("<Return>", lambda event: rename_door())
+    new_device_entry.bind("<Return>", lambda event: add_device())
+    # Start with the typing cursor in the new device box, since adding
+    # devices is the most common job in this window.
+    new_device_entry.focus_set()
 
     # Fill the device list when the window first opens.
     refresh_devices()
@@ -660,6 +684,12 @@ def open_project_window(project=None):
         show_project(saved_project)
         project_window.destroy()
 
+    # Enter in any of the four boxes saves, like clicking Save.
+    for entry in entries.values():
+        entry.bind("<Return>", lambda event: save_project())
+    # Start with the typing cursor in the project name box.
+    entries["name"].focus_set()
+
     # Save is the main action here, so it gets the blue Accent style.
     ttk.Button(project_window, text="Save", command=save_project, style="Accent.TButton").grid(row=4, column=1, sticky="e", pady=10)
     ttk.Button(project_window, text="Cancel", command=project_window.destroy).grid(row=4, column=2, padx=10, pady=10)
@@ -820,6 +850,17 @@ tree.pack(fill="both", expand=True, padx=10, pady=10)
 # Double-clicking a door (or one of its devices) opens the Edit window.
 # "<Double-1>" means a double-click with mouse button 1 (the left button).
 tree.bind("<Double-1>", row_double_clicked)
+
+# Keyboard shortcuts for the main window:
+#   Enter   -> edit the selected door (like double-clicking it)
+#   Delete  -> delete the selected door (it still asks "are you sure?")
+#   Ctrl+N  -> add a new door
+# Enter and Delete are bound to the table, so they only work when the table
+# has the focus (after clicking a row). Ctrl+N is bound to the whole main
+# window. Pop-ups are separate windows, so it doesn't fire while typing in one.
+tree.bind("<Return>", lambda event: open_edit_door())
+tree.bind("<Delete>", lambda event: remove_selected_door())
+window.bind("<Control-n>", lambda event: open_add_door())
 
 # Turn on the theme the user picked last time (light the very first time).
 # This also colors the status rows: "C" green, "P" yellow, "R" red.
