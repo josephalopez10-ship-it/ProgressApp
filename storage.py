@@ -127,3 +127,39 @@ def save_projects():
     # indent=2 spreads the file over several lines so it's easy to read.
     with PROJECTS_FILE.open("w", encoding="utf-8") as file:
         json.dump(data, file, indent=2)
+
+
+# ---------------------------------------------------------------------------
+# Settings: small choices the app remembers between runs, like light or dark
+# mode. Kept in their own file, settings.json, separate from your job data:
+#   {"theme": "dark"}
+# ---------------------------------------------------------------------------
+SETTINGS_FILE = FOLDER / "settings.json"
+
+
+# Read one setting, or give back default if it was never saved (or if
+# settings.json is missing or damaged; a lost setting isn't worth stopping
+# the app for, unlike lost job data).
+def load_setting(name, default):
+    try:
+        with SETTINGS_FILE.open("r", encoding="utf-8") as file:
+            settings = json.load(file)
+        return settings.get(name, default)
+    except (OSError, json.JSONDecodeError, AttributeError):
+        return default
+
+
+# Save one setting, keeping any other settings already in the file.
+def save_setting(name, value):
+    try:
+        with SETTINGS_FILE.open("r", encoding="utf-8") as file:
+            settings = json.load(file)
+        # A damaged file might hold something that isn't a dictionary.
+        if not isinstance(settings, dict):
+            settings = {}
+    except (OSError, json.JSONDecodeError):
+        settings = {}
+
+    settings[name] = value
+    with SETTINGS_FILE.open("w", encoding="utf-8") as file:
+        json.dump(settings, file, indent=2)

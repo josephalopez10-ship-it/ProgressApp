@@ -157,8 +157,10 @@ class UsesTempSaveFile(unittest.TestCase):
         # Remember the real paths so they can be put back afterward.
         self.real_projects_file = storage.PROJECTS_FILE
         self.real_old_doors_file = storage.OLD_DOORS_FILE
+        self.real_settings_file = storage.SETTINGS_FILE
         storage.PROJECTS_FILE = folder / "projects.json"
         storage.OLD_DOORS_FILE = folder / "door_list.json"
+        storage.SETTINGS_FILE = folder / "settings.json"
         # Start every test with no projects.
         storage.project_list.clear()
 
@@ -166,6 +168,7 @@ class UsesTempSaveFile(unittest.TestCase):
         # tearDown runs after EVERY test, even ones that fail.
         storage.PROJECTS_FILE = self.real_projects_file
         storage.OLD_DOORS_FILE = self.real_old_doors_file
+        storage.SETTINGS_FILE = self.real_settings_file
         storage.project_list.clear()
         self.temp_folder.cleanup()
 
@@ -273,6 +276,9 @@ class GuiTestBase(UsesTempSaveFile):
     # A test class can set this to a list of whole projects instead, to start
     # with several projects (or [] for none at all).
     SAVED_PROJECTS = None
+    # A test class can set this to start with saved settings, like
+    # {"theme": "dark"}. None means no settings.json (the very first run).
+    SAVED_SETTINGS = None
 
     def setUp(self):
         super().setUp()
@@ -281,6 +287,8 @@ class GuiTestBase(UsesTempSaveFile):
         if projects is None:
             projects = [{"name": self.PROJECT_NAME, "doors": self.SAVED_DOORS}]
         self.write_save_file(json.dumps(projects))
+        if self.SAVED_SETTINGS is not None:
+            storage.SETTINGS_FILE.write_text(json.dumps(self.SAVED_SETTINGS), encoding="utf-8")
 
         # Replace the pop-up error box with one that just records the message,
         # so the tests don't stop and wait for someone to click OK.
@@ -350,9 +358,9 @@ class TestGuiAddDoor(GuiTestBase):
         add_window = self.newest_window()
         widgets = add_window.winfo_children()
         # The two text boxes, in the order they were created: name, then device.
-        name_entry, device_entry = [w for w in widgets if type(w) is tk.Entry]
+        name_entry, device_entry = [w for w in widgets if type(w) is ttk.Entry]
         status_box = [w for w in widgets if isinstance(w, ttk.Combobox)][0]
-        buttons = {w.cget("text"): w for w in widgets if isinstance(w, tk.Button)}
+        buttons = {w.cget("text"): w for w in widgets if isinstance(w, ttk.Button)}
         return add_window, name_entry, device_entry, status_box, buttons
 
     # Helper: type a device name, pick its status, and click Add Device.
@@ -441,7 +449,7 @@ class TestGuiEditDoor(GuiTestBase):
         edit_window = self.newest_window()
         widgets = edit_window.winfo_children()
         # Text boxes and dropdowns, in the order they were created.
-        name_entry, new_device_entry = [w for w in widgets if type(w) is tk.Entry]
+        name_entry, new_device_entry = [w for w in widgets if type(w) is ttk.Entry]
         status_box, new_status_box = [w for w in widgets if isinstance(w, ttk.Combobox)]
         return {
             "window": edit_window,
@@ -450,7 +458,7 @@ class TestGuiEditDoor(GuiTestBase):
             "status": status_box,
             "new_status": new_status_box,
             "devices": [w for w in widgets if isinstance(w, tk.Listbox)][0],
-            "buttons": {w.cget("text"): w for w in widgets if isinstance(w, tk.Button)},
+            "buttons": {w.cget("text"): w for w in widgets if isinstance(w, ttk.Button)},
         }
 
     # Helper: click a device in the Edit window's device list.
@@ -987,9 +995,9 @@ class TestGuiProjects(GuiTestBase):
         # Add a door through the real Add door window.
         self.gui["open_add_door"]()
         add_window = self.newest_window()
-        name_entry = [w for w in add_window.winfo_children() if type(w) is tk.Entry][0]
+        name_entry = [w for w in add_window.winfo_children() if type(w) is ttk.Entry][0]
         name_entry.insert(0, "Roof Hatch")
-        buttons = {w.cget("text"): w for w in add_window.winfo_children() if isinstance(w, tk.Button)}
+        buttons = {w.cget("text"): w for w in add_window.winfo_children() if isinstance(w, ttk.Button)}
         buttons["Save Door"].invoke()
 
         mall, hospital = storage.project_list
@@ -1034,8 +1042,8 @@ class TestGuiProjectButtons(GuiTestBase):
         self.gui[button_function]()
         project_window = self.newest_window()
         widgets = project_window.winfo_children()
-        entries = [w for w in widgets if type(w) is tk.Entry]
-        buttons = {w.cget("text"): w for w in widgets if isinstance(w, tk.Button)}
+        entries = [w for w in widgets if type(w) is ttk.Entry]
+        buttons = {w.cget("text"): w for w in widgets if isinstance(w, ttk.Button)}
         return project_window, entries, buttons
 
     # Helper: replace the text in a box.
@@ -1138,6 +1146,106 @@ class TestGuiProjectButtons(GuiTestBase):
         self.assertEqual(len(self.errors), 1)
         self.assertTrue(self.errors[0].startswith("This is your only project."))
         self.assertEqual([p.name for p in storage.project_list], ["City Hospital"])
+
+
+# ---------------------------------------------------------------------------
+# Settings (settings.json) on their own
+# ---------------------------------------------------------------------------
+class TestSettings(UsesTempSaveFile):
+
+    def test_missing_file_gives_default(self):
+        self.assertEqual(storage.load_setting("theme", "light"), "light")
+
+    def test_save_then_load(self):
+        storage.save_setting("theme", "dark")
+        self.assertEqual(storage.load_setting("theme", "light"), "dark")
+
+    def test_saving_keeps_other_settings(self):
+        storage.save_setting("theme", "dark")
+        storage.save_setting("something_else", 5)
+        self.assertEqual(json.loads(storage.SETTINGS_FILE.read_text(encoding="utf-8")),
+                         {"theme": "dark", "something_else": 5})
+
+    def test_damaged_file_gives_default_and_can_be_saved_over(self):
+        # Unlike projects.json, a damaged settings file isn't worth stopping
+        # the app for: it just goes back to the default.
+        storage.SETTINGS_FILE.write_text("{not json", encoding="utf-8")
+        self.assertEqual(storage.load_setting("theme", "light"), "light")
+        storage.save_setting("theme", "dark")
+        self.assertEqual(storage.load_setting("theme", "light"), "dark")
+
+    def test_settings_file_is_ignored_by_git(self):
+        gitignore_lines = Path(".gitignore").read_text(encoding="utf-8").splitlines()
+        self.assertIn(self.real_settings_file.name, gitignore_lines)
+
+
+# ---------------------------------------------------------------------------
+# Light / dark mode
+# ---------------------------------------------------------------------------
+class TestGuiTheme(GuiTestBase):
+
+    SAVED_DOORS = [{"name": "Joes Door", "devices": {"Lock": "C", "REX": "R"}}]
+
+    # Helper: the text color the table uses for a status letter.
+    # str() turns tkinter's color object into plain text like "#2e7d32".
+    def tag_color(self, status):
+        return str(self.gui["tree"].tag_configure(status, "foreground"))
+
+    def test_first_run_is_light(self):
+        self.assertEqual(self.gui["sv_ttk"].get_theme(), "light")
+        self.assertEqual(self.gui["theme_button"].cget("text"), "Dark mode")
+        self.assertEqual(self.tag_color("C"), "#2e7d32")
+
+    def test_toggle_to_dark_and_back(self):
+        self.gui["toggle_theme"]()
+        self.assertEqual(self.gui["sv_ttk"].get_theme(), "dark")
+        self.assertEqual(self.gui["theme_button"].cget("text"), "Light mode")
+        # Brighter status colors in dark mode.
+        self.assertEqual(self.tag_color("C"), "#66bb6a")
+        self.assertEqual(self.tag_color("R"), "#ef5350")
+        # The choice is remembered.
+        self.assertEqual(storage.load_setting("theme", "light"), "dark")
+
+        self.gui["toggle_theme"]()
+        self.assertEqual(self.gui["sv_ttk"].get_theme(), "light")
+        self.assertEqual(self.tag_color("C"), "#2e7d32")
+        self.assertEqual(storage.load_setting("theme", "light"), "light")
+
+    def test_table_rows_stay_tall_after_toggle(self):
+        # set_theme() resets the table style, so apply_theme() sets it again.
+        self.gui["toggle_theme"]()
+        self.assertEqual(str(ttk.Style().lookup("Treeview", "rowheight")), "28")
+
+
+class TestGuiStartsDark(GuiTestBase):
+
+    # The user picked dark mode last time.
+    SAVED_SETTINGS = {"theme": "dark"}
+
+    def test_starts_in_dark_mode(self):
+        self.assertEqual(self.gui["sv_ttk"].get_theme(), "dark")
+        self.assertEqual(self.gui["theme_button"].cget("text"), "Light mode")
+
+    def test_popup_and_device_list_are_dark(self):
+        # The Edit door window: its background and its device list must be
+        # dark too, not light gray / white. sv_ttk does this a moment after
+        # set_theme(), so let tkinter catch up first with update().
+        self.gui["window"].update()
+        tree = self.gui["tree"]
+        tree.selection_set(tree.get_children()[0])
+        self.gui["open_edit_door"]()
+        edit_window = self.newest_window()
+        edit_window.update()
+        self.assertEqual(edit_window.cget("background"), "#1c1c1c")
+        listbox = [w for w in edit_window.winfo_children() if isinstance(w, tk.Listbox)][0]
+        self.assertEqual(listbox.cget("background"), "#1c1c1c")
+        self.assertEqual(listbox.cget("foreground"), "#fafafa")
+
+    def test_switching_to_light_recolors_open_windows(self):
+        self.gui["window"].update()
+        self.gui["toggle_theme"]()
+        self.gui["window"].update()
+        self.assertEqual(self.gui["window"].cget("background"), "#fafafa")
 
 
 class TestGuiNoProjects(GuiTestBase):

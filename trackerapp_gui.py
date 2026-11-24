@@ -16,6 +16,9 @@ import tkinter as tk
 # ttk has nicer-looking versions of tkinter's widgets, like the Treeview table
 # and the Combobox dropdown.
 from tkinter import ttk
+# sv_ttk is the "Sun Valley" theme: the modern Windows 11 look, in light and
+# dark (installed with pip, and listed in requirements.txt).
+import sv_ttk
 # messagebox shows pop-up error and confirmation boxes.
 from tkinter import messagebox
 # filedialog opens the standard "Save as" window to pick where to save a file.
@@ -32,12 +35,21 @@ import report
 # We write storage.project_list, storage.save_projects(), and so on.
 import storage
 
-# The text color for each status. These are hex color codes (#RRGGBB).
+# The text color for each status, in light mode and in dark mode. These are
+# hex color codes (#RRGGBB). Dark mode uses brighter colors, because the
+# darker ones are hard to read on a dark background.
 # N isn't listed, so N rows use the normal text color.
 STATUS_COLORS = {
-    "C": "#2e7d32",   # green
-    "P": "#b58900",   # yellow
-    "R": "#c62828",   # red
+    "light": {
+        "C": "#2e7d32",   # green
+        "P": "#b58900",   # yellow
+        "R": "#c62828",   # red
+    },
+    "dark": {
+        "C": "#66bb6a",   # bright green
+        "P": "#ffca28",   # bright yellow
+        "R": "#ef5350",   # bright red
+    },
 }
 
 # The project picked in the dropdown at the top. Every function that works
@@ -146,19 +158,30 @@ def row_double_clicked(event):
     return "break"
 
 
+# Get a new pop-up window (Add door, Edit door, or a project window) ready.
+# All three pop-ups need the same steps, so they're written once here.
+def setup_popup(popup):
+    # (No colors needed here: sv_ttk colors every window and list to match
+    # light or dark mode by itself.)
+    # transient(window) tells the desktop this window belongs to the main
+    # window, so it always stays in front of it and never gets hidden behind.
+    popup.transient(window)
+    # Wait until the window is actually on screen before grab_set().
+    # A double-click opens the Edit window while the mouse is still busy with
+    # the second click, so it appears a moment later than usual. Without this
+    # wait, grab_set() fails with "grab failed: window not viewable".
+    popup.wait_visibility()
+    # grab_set() stops clicks on the main window until this one is closed.
+    popup.grab_set()
+
+
 # Open the "Add Door" window. Runs when the Add Door button is clicked.
 def open_add_door():
     # Toplevel = a second window that opens on top of the main one.
     add_window = tk.Toplevel(window)
     add_window.title("Add door")
-    # transient(window) tells the desktop this window belongs to the main
-    # window, so it always stays in front of it and never gets hidden behind.
-    add_window.transient(window)
-    # Wait until the window is actually on screen. grab_set() below fails
-    # with "grab failed: window not viewable" if it runs too early.
-    add_window.wait_visibility()
-    # grab_set() stops clicks on the main window until this one is closed.
-    add_window.grab_set()
+    # Theme colors, stay in front, block clicks on the main window.
+    setup_popup(add_window)
 
     # Build the door with no name yet. Devices get added to it as the user
     # clicks Add Device, and the name is filled in when they click Save Door.
@@ -168,17 +191,17 @@ def open_add_door():
     # grid() places widgets in rows and columns, like a spreadsheet.
     # sticky="w" lines the widget up on the left (w = west).
     # padx / pady add empty space around the widget, in pixels.
-    tk.Label(add_window, text="Door name:").grid(row=0, column=0, sticky="w", padx=10, pady=5)
+    ttk.Label(add_window, text="Door name:").grid(row=0, column=0, sticky="w", padx=10, pady=5)
 
     # An Entry is a one-line box the user can type in.
-    name_entry = tk.Entry(add_window, width=30)
+    name_entry = ttk.Entry(add_window, width=30)
 
     # columnspan=2 lets the name box stretch across columns 1 and 2.
     name_entry.grid(row=0, column=1, columnspan=2, sticky="w", padx=10, pady=5)
 
     # --- Row 1: device name box + status dropdown ---
-    tk.Label(add_window, text="Device:").grid(row=1, column=0, sticky="w", padx=10)
-    device_entry = tk.Entry(add_window, width=20)
+    ttk.Label(add_window, text="Device:").grid(row=1, column=0, sticky="w", padx=10)
+    device_entry = ttk.Entry(add_window, width=20)
     device_entry.grid(row=1, column=1, sticky="w", padx=10)
 
     # A Combobox is a dropdown. state="readonly" means you can only pick
@@ -221,7 +244,7 @@ def open_add_door():
     # command=add_device means "run add_device when clicked".
     # There's no () after the name: we're handing over the function to run
     # later, not running it now.
-    tk.Button(add_window, text="Add Device", command=add_device).grid(row=2, column=2, padx=10, pady=5)
+    ttk.Button(add_window, text="Add Device", command=add_device).grid(row=2, column=2, padx=10, pady=5)
 
     # Runs when Save Door is clicked.
     def save_door():
@@ -245,10 +268,10 @@ def open_add_door():
 
     # --- Row 4: Save Door and Cancel buttons ---
     # sticky="e" lines Save Door up on the right (e = east), next to Cancel.
-    tk.Button(add_window, text="Save Door", command=save_door).grid(row=4, column=1, sticky="e", pady=10)
+    ttk.Button(add_window, text="Save Door", command=save_door).grid(row=4, column=1, sticky="e", pady=10)
     # Cancel just closes the window. new_door was never added to the project,
     # so nothing is saved.
-    tk.Button(add_window, text="Cancel", command=add_window.destroy).grid(row=4, column=2, pady=10)
+    ttk.Button(add_window, text="Cancel", command=add_window.destroy).grid(row=4, column=2, pady=10)
 
 
 # Open the "Edit door" window for the door selected in the table.
@@ -264,22 +287,12 @@ def open_edit_door():
 
     edit_window = tk.Toplevel(window)
     edit_window.title(f"Edit Door - {door.name}")
-    # Keep this window in front of the main window. Without this, a
-    # double-click could open it and then the desktop would bring the main
-    # window back to the front, hiding this one behind it.
-    edit_window.transient(window)
-    # Wait until the window is actually on screen before grab_set().
-    # A double-click opens this window while the mouse is still busy with the
-    # second click, so the window appears a moment later than usual. Without
-    # this wait, grab_set() fails with "grab failed: window not viewable" and
-    # the rest of this function never runs.
-    edit_window.wait_visibility()
-    # Stop clicks on the main window until this one is closed.
-    edit_window.grab_set()
+    # Theme colors, stay in front, block clicks on the main window.
+    setup_popup(edit_window)
 
     # --- Row 0: door name + Rename button ---
-    tk.Label(edit_window, text="Door name:").grid(row=0, column=0, sticky="w", padx=10, pady=5)
-    name_entry = tk.Entry(edit_window, width=25)
+    ttk.Label(edit_window, text="Door name:").grid(row=0, column=0, sticky="w", padx=10, pady=5)
+    name_entry = ttk.Entry(edit_window, width=25)
 
     # Put the current name in the box so the user can change it.
     # insert(0, ...) means "put this text at the start of the box".
@@ -346,10 +359,10 @@ def open_edit_door():
         edit_window.title(f"Edit Door - {door.name}")
         changes_made()
 
-    tk.Button(edit_window, text="Rename", command=rename_door).grid(row=0, column=2, padx=10, pady=5)
+    ttk.Button(edit_window, text="Rename", command=rename_door).grid(row=0, column=2, padx=10, pady=5)
 
     # --- Row 2: status dropdown + Set Status button (for the selected device) ---
-    tk.Label(edit_window, text="Status:").grid(row=2, column=0, sticky="w", padx=10)
+    ttk.Label(edit_window, text="Status:").grid(row=2, column=0, sticky="w", padx=10)
     status_box = ttk.Combobox(edit_window, values=VALID_STATUSES, width=4, state="readonly")
     status_box.grid(row=2, column=1, sticky="w", padx=10)
 
@@ -363,7 +376,7 @@ def open_edit_door():
         door.devices[device_name] = status_box.get()
         changes_made()
 
-    tk.Button(edit_window, text="Set Status", command=set_status).grid(row=2, column=2, padx=10, pady=5)
+    ttk.Button(edit_window, text="Set Status", command=set_status).grid(row=2, column=2, padx=10, pady=5)
 
     # When a device is clicked in the listbox, show its current status in the
     # dropdown, so the user can see it before changing it.
@@ -391,13 +404,13 @@ def open_edit_door():
             del door.devices[device_name]
             changes_made()
 
-    tk.Button(edit_window, text="Delete device", command=delete_device).grid(row=3, column=2, padx=10, pady=5)
+    ttk.Button(edit_window, text="Delete device", command=delete_device).grid(row=3, column=2, padx=10, pady=5)
 
     # --- Rows 4-5: add a new device ---
     # pady=(15, 5) adds 15 pixels of space above this row and 5 below,
     # to separate "add a new device" from the editing controls above.
-    tk.Label(edit_window, text="New device:").grid(row=4, column=0, sticky="w", padx=10, pady=(15, 5))
-    new_device_entry = tk.Entry(edit_window, width=20)
+    ttk.Label(edit_window, text="New device:").grid(row=4, column=0, sticky="w", padx=10, pady=(15, 5))
+    new_device_entry = ttk.Entry(edit_window, width=20)
     new_device_entry.grid(row=4, column=1, sticky="w", padx=10, pady=(15, 5))
     # A second dropdown just for the new device, so it doesn't get mixed up
     # with the one used for Set Status.
@@ -422,7 +435,7 @@ def open_edit_door():
         new_device_entry.delete(0, "end")
         changes_made()
 
-    tk.Button(edit_window, text="Add device", command=add_device).grid(row=5, column=2, padx=10, pady=5)
+    ttk.Button(edit_window, text="Add device", command=add_device).grid(row=5, column=2, padx=10, pady=5)
 
     # --- Row 6 (left side): Delete Door button ---
     # Deletes the whole door. If Yes is clicked, the door is gone, so this
@@ -432,11 +445,11 @@ def open_edit_door():
         if confirm_and_delete_door(door, edit_window):
             edit_window.destroy()
 
-    tk.Button(edit_window, text="Delete Door", command=delete_this_door).grid(row=6, column=0, sticky="w", padx=10, pady=10)
+    ttk.Button(edit_window, text="Delete Door", command=delete_this_door).grid(row=6, column=0, sticky="w", padx=10, pady=10)
 
     # --- Row 6 (right side): Close button ---
     # Changes are already saved, so Close just closes the window.
-    tk.Button(edit_window, text="Close", command=edit_window.destroy).grid(row=6, column=2, padx=10, pady=10)
+    ttk.Button(edit_window, text="Close", command=edit_window.destroy).grid(row=6, column=2, padx=10, pady=10)
 
     # Fill the device list when the window first opens.
     refresh_devices()
@@ -584,11 +597,8 @@ def open_project_window(project=None):
         project_window.title("New project")
     else:
         project_window.title(f"Edit project - {project.name}")
-    # Same three lines as the other pop-up windows: stay in front of the main
-    # window, wait until it's on screen, then block clicks on the main window.
-    project_window.transient(window)
-    project_window.wait_visibility()
-    project_window.grab_set()
+    # Theme colors, stay in front, block clicks on the main window.
+    setup_popup(project_window)
 
     # The four boxes, one per row. Each row is a label on the left and a box
     # on the right. This list pairs each label with the Project attribute it
@@ -605,8 +615,8 @@ def open_project_window(project=None):
     # enumerate() gives each item's position (0, 1, 2, 3) along with the item,
     # which is used as the row number.
     for row, (label_text, attribute) in enumerate(fields):
-        tk.Label(project_window, text=label_text).grid(row=row, column=0, sticky="w", padx=10, pady=5)
-        entry = tk.Entry(project_window, width=35)
+        ttk.Label(project_window, text=label_text).grid(row=row, column=0, sticky="w", padx=10, pady=5)
+        entry = ttk.Entry(project_window, width=35)
         entry.grid(row=row, column=1, columnspan=2, sticky="w", padx=10, pady=5)
         # When editing, fill the box with the project's current value.
         # getattr(project, "job_number") is the same as project.job_number;
@@ -649,8 +659,8 @@ def open_project_window(project=None):
         show_project(saved_project)
         project_window.destroy()
 
-    tk.Button(project_window, text="Save", command=save_project).grid(row=4, column=1, sticky="e", pady=10)
-    tk.Button(project_window, text="Cancel", command=project_window.destroy).grid(row=4, column=2, padx=10, pady=10)
+    ttk.Button(project_window, text="Save", command=save_project).grid(row=4, column=1, sticky="e", pady=10)
+    ttk.Button(project_window, text="Cancel", command=project_window.destroy).grid(row=4, column=2, padx=10, pady=10)
 
 
 # Runs when the New button next to the dropdown is clicked.
@@ -681,6 +691,35 @@ def delete_project():
         show_project(storage.project_list[0])
 
 
+# Switch the whole app to "light" or "dark" mode.
+def apply_theme(theme):
+    # This also recolors every window and list (including pop-ups opened
+    # later) as soon as tkinter gets to it, a moment after this function.
+    sv_ttk.set_theme(theme)
+    # Taller table rows, so the list is easier to read and tap on a touch
+    # screen. set_theme() resets the table's style, so this comes after it.
+    ttk.Style().configure("Treeview", rowheight=28)
+    # Each mode has its own status colors (see STATUS_COLORS at the top).
+    for status, color in STATUS_COLORS[theme].items():
+        tree.tag_configure(status, foreground=color)
+    # The button offers the OTHER mode.
+    if theme == "dark":
+        theme_button.config(text="Light mode")
+    else:
+        theme_button.config(text="Dark mode")
+
+
+# Runs when the Light mode / Dark mode button is clicked: switch to the
+# other mode, and remember it for next time.
+def toggle_theme():
+    if sv_ttk.get_theme() == "dark":
+        new_theme = "light"
+    else:
+        new_theme = "dark"
+    apply_theme(new_theme)
+    storage.save_setting("theme", new_theme)
+
+
 ##########################################################################
 # Build the main window. Everything below runs once, when the app starts.
 ##########################################################################
@@ -700,24 +739,24 @@ if len(storage.project_list) == 0:
 # Create the main window.
 window = tk.Tk()
 window.title("TrackerApp")
-window.geometry("560x600")   # width x height in pixels (wide enough for the project row)
+window.geometry("560x680")   # width x height in pixels (wide enough for the project row)
 
 # A row along the bottom of the window to hold the buttons.
 # side="bottom" keeps the buttons visible even if the window is made smaller.
 # The main window uses pack() (stacks things), and the Add door and Edit door
 # windows use grid() (rows and columns). Never use both in the same window,
 # or it freezes.
-button_frame = tk.Frame(window)
+button_frame = ttk.Frame(window)
 button_frame.pack(side="bottom", fill="x", padx=10, pady=(0, 10))
-tk.Button(button_frame, text="Add Door", command=open_add_door).pack(side="left")
+ttk.Button(button_frame, text="Add Door", command=open_add_door).pack(side="left")
 
 # padx=(10, 0) puts 10 pixels of space on the left of the button, none on the right.
-tk.Button(button_frame, text="Edit Door", command=open_edit_door).pack(side="left", padx=(10, 0))
+ttk.Button(button_frame, text="Edit Door", command=open_edit_door).pack(side="left", padx=(10, 0))
 
 # The Export button opens a small drop-down menu to pick the report format.
-# A Menubutton is a button that shows a Menu when clicked.
-# relief="raised" makes it look like the other buttons.
-export_button = tk.Menubutton(button_frame, text="Export ▾", relief="raised")
+# A Menubutton is a button that shows a Menu when clicked. The theme draws
+# the little arrow itself.
+export_button = ttk.Menubutton(button_frame, text="Export")
 
 # tearoff=False removes a dashed line tkinter normally puts at the top of
 # menus (clicking it would pop the menu out into its own little window).
@@ -731,20 +770,20 @@ export_button.pack(side="left", padx=(10, 0))
 
 # side="right" puts Remove Door on the far right, away from Add and Edit,
 # so it's harder to click by accident.
-tk.Button(button_frame, text="Remove Door", command=remove_selected_door).pack(side="right")
+ttk.Button(button_frame, text="Remove Door", command=remove_selected_door).pack(side="right")
 
 # The project picker along the top of the window: a label and a dropdown.
 # It's packed first, so it sits above the summary and the table.
-project_frame = tk.Frame(window)
+project_frame = ttk.Frame(window)
 project_frame.pack(side="top", fill="x", padx=10, pady=(10, 0))
-tk.Label(project_frame, text="Project:").pack(side="left")
+ttk.Label(project_frame, text="Project:").pack(side="left")
 # state="readonly" means you can only pick a project, not type in the box.
 project_box = ttk.Combobox(project_frame, state="readonly", width=25)
 project_box.pack(side="left", padx=(5, 0))
 # New / Edit / Delete project buttons, to the right of the dropdown.
-tk.Button(project_frame, text="New", command=new_project).pack(side="left", padx=(10, 0))
-tk.Button(project_frame, text="Edit", command=edit_project).pack(side="left", padx=(5, 0))
-tk.Button(project_frame, text="Delete", command=delete_project).pack(side="left", padx=(5, 0))
+ttk.Button(project_frame, text="New", command=new_project).pack(side="left", padx=(10, 0))
+ttk.Button(project_frame, text="Edit", command=edit_project).pack(side="left", padx=(5, 0))
+ttk.Button(project_frame, text="Delete", command=delete_project).pack(side="left", padx=(5, 0))
 # "<<ComboboxSelected>>" is the event tkinter sends when a choice is picked.
 project_box.bind("<<ComboboxSelected>>", project_chosen)
 
@@ -752,10 +791,16 @@ project_box.bind("<<ComboboxSelected>>", project_chosen)
 # font=(name, size, "bold") makes it bigger and bold so it stands out.
 # justify="left" lines up both lines of text on the left.
 # It must be packed BEFORE the table below, or it would end up under it.
-summary_label = tk.Label(window, text="", font=("TkDefaultFont", 11, "bold"), justify="left")
-
-# anchor="w" keeps the label on the left side of the window.
-summary_label.pack(side="top", anchor="w", padx=10, pady=(10, 0))
+# The summary and the Light/Dark mode button share one row, in a Frame:
+# the summary on the left, the button on the right.
+summary_frame = ttk.Frame(window)
+summary_frame.pack(side="top", fill="x", padx=10, pady=(10, 0))
+summary_label = ttk.Label(summary_frame, text="", font=("TkDefaultFont", 11, "bold"), justify="left")
+summary_label.pack(side="left")
+# The button's text ("Dark mode" or "Light mode") is set by apply_theme().
+theme_button = ttk.Button(summary_frame, command=toggle_theme)
+# anchor="n" keeps it at the top of the row, level with the summary's first line.
+theme_button.pack(side="right", anchor="n")
 
 # A Treeview is a table where rows can have rows inside them, like folders.
 # Column "#0" is the built-in first column (door or device name).
@@ -771,9 +816,9 @@ tree.pack(fill="both", expand=True, padx=10, pady=10)
 # "<Double-1>" means a double-click with mouse button 1 (the left button).
 tree.bind("<Double-1>", row_double_clicked)
 
-# Rows tagged "C" show in green, "P" in yellow, "R" in red.
-for status, color in STATUS_COLORS.items():
-    tree.tag_configure(status, foreground=color)
+# Turn on the theme the user picked last time (light the very first time).
+# This also colors the status rows: "C" green, "P" yellow, "R" red.
+apply_theme(storage.load_setting("theme", "light"))
 
 # Start on the first project. This fills the dropdown, the table and the
 # summary.
