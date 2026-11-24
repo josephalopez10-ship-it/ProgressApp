@@ -111,7 +111,9 @@ HARDWARE = {
     "91": ["Arm Barrier"],
     "92": ["Trash Compactor"],
     "93": ["Elevator Control"],
-    # Double door (leaf B is inactive unless it says otherwise)
+    # Double door. Leaf B's hardware isn't tracked separately: each device
+    # counts once per door, even when the legend gives leaf B its own (a
+    # REX or maglock on each leaf is still one "REX" or "Maglock").
     "05": [],
     "15": ["Mortise Lock"],
     "16": ["Mortise Lock", "REX"],
@@ -121,10 +123,10 @@ HARDWARE = {
     "28": ["Mortise Lock (MLR)", "REX", "Door Operator"],
     "35": ["Electrified Panic"],
     "36": ["Electrified Panic", "REX"],
-    "37": ["Electrified Panic", "REX", "REX (Leaf B)"],
-    "45": ["Electrified Panic", "Delayed Egress", "Delayed Egress (Leaf B)"],
-    "55": ["Maglock", "Maglock (Leaf B)"],
-    "56": ["Maglock", "Maglock (Leaf B)", "Door Operator"],
+    "37": ["Electrified Panic", "REX"],
+    "45": ["Electrified Panic", "Delayed Egress"],
+    "55": ["Maglock"],
+    "56": ["Maglock", "Door Operator"],
     "57": ["Maglock"],
     "71": ["Dual Lock (Emergency Door System)"],
     "85": ["Rack Lock"],
@@ -276,17 +278,14 @@ def decode_door_type(code):
     match = DOOR_TYPE_CODE.fullmatch(code)
     if match is None:
         return []
-    # group(3) is the door type letter, group(4) the hardware digits,
-    # group(5) the extras letter.
-    door_type = match.group(3)
+    # group(4) is the hardware digits, group(5) the extras letter.
     devices = []
     devices += HARDWARE.get(match.group(4), [])
     devices += EXTRAS.get(match.group(5), [])
-    # Every controlled door gets a door contact on each leaf (note 06 on
-    # the symbols sheet), so a double door gets two.
+    # Every controlled door gets a door contact (note 06 on the symbols
+    # sheet). It's tracked as one device even on a double door, where it
+    # covers both leaves.
     devices.append("Door Contact")
-    if door_type == "D":
-        devices.append("Door Contact (Leaf B)")
     return devices
 
 

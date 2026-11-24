@@ -1863,7 +1863,7 @@ class TestPrintsImport(unittest.TestCase):
         # has the iris reader, so it isn't added twice.
         self.assertNotIn("Biometric Reader", devices)
         self.assertEqual(devices, ["Iris Reader (PHX53-CCD15G-210)", "Mortise Lock", "Emergency Release",
-                                   "Anti-Tailgate", "Alarm Sounder", "Door Contact", "Door Contact (Leaf B)"])
+                                   "Anti-Tailgate", "Alarm Sounder", "Door Contact"])
 
     def test_monitored_gate_has_no_mechanical_lock(self):
         # MFG00A = monitored gate with a mechanical lock (nothing to wire).
@@ -1876,7 +1876,7 @@ class TestPrintsImport(unittest.TestCase):
 
     def test_decode_door_type(self):
         self.assertEqual(prints_import.decode_door_type("CCD15B"),
-                         ["Mortise Lock", "Emergency Release", "Door Contact", "Door Contact (Leaf B)"])
+                         ["Mortise Lock", "Emergency Release", "Door Contact"])
         self.assertEqual(prints_import.decode_door_type("NMO00X"), ["Door Contact"])
         # Not a door type code (an alarm point's code).
         self.assertEqual(prints_import.decode_door_type("MAT"), [])
